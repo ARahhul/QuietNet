@@ -16,23 +16,28 @@ log = logging.getLogger("pahra.companion")
 KNOWN_MUTATING = {"adb_connect", "adb_pair", "set_private_dns", "clear_private_dns", "start_dns_forwarder", "stop_dns_forwarder"}
 
 
-def resolve_companion_command(command: str) -> StdioServerParameters | None:
-    """`pahra-companion` on PATH, or the sibling repo's venv (C:\\Projects\\pahra\\companion\\.venv)."""
+def resolve_companion_command(command: str, companion_dir: Path | None = None) -> StdioServerParameters | None:
+    """`pahra-companion` on PATH, or run it from the sibling project's venv (companion/.venv, made by `poetry install`).
+
+    The venv case runs `python -m pahra_companion` rather than the launcher script: pip writes a .exe, Poetry
+    writes a .cmd shim, and the module form works the same for both (and on Linux).
+    """
     parts = command.split()
     if not parts:
         return None
+    if companion_dir is None:
+        companion_dir = Path(__file__).resolve().parents[3] / "companion"
+    cwd = str(companion_dir) if companion_dir.exists() else None
     exe = shutil.which(parts[0])
-    companion_dir = Path(__file__).resolve().parents[3] / "companion"
-    if not exe:
-        for cand in (companion_dir / ".venv" / "Scripts" / f"{parts[0]}.exe", companion_dir / ".venv" / "bin" / parts[0]):
-            if cand.exists():
-                exe = str(cand)
-                break
-    if not exe:
-        return None
-    return StdioServerParameters(
-        command=exe, args=parts[1:], env=dict(os.environ), cwd=str(companion_dir) if companion_dir.exists() else None
-    )
+    if exe:
+        return StdioServerParameters(command=exe, args=parts[1:], env=dict(os.environ), cwd=cwd)
+    if parts[0] == "pahra-companion":
+        for py in (companion_dir / ".venv" / "Scripts" / "python.exe", companion_dir / ".venv" / "bin" / "python"):
+            if py.exists():
+                return StdioServerParameters(
+                    command=str(py), args=["-m", "pahra_companion", *parts[1:]], env=dict(os.environ), cwd=cwd
+                )
+    return None
 
 
 class CompanionClient:
@@ -46,7 +51,7 @@ class CompanionClient:
 
     async def start(self) -> None:
         if self.target is None:
-            self.error = "pahra-companion not found: install it (pip install -e companion) or set COMPANION_COMMAND"
+            self.error = "pahra-companion not found: run `poetry install` in companion/ or set COMPANION_COMMAND"
             return
         try:
             self._cm = Client(self.target, read_timeout_seconds=120)

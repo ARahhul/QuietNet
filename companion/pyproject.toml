@@ -3,7 +3,7 @@ name = "pahra-companion"
 version = "0.1.0"
 description = "Pahra home companion: MCP server that finds TVs on the home LAN and points their DNS at Pahra"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<4.0"
 dependencies = [
     # Official MCP Python SDK. Written against mcp 2.x (MCPServer); server.py
     # falls back to the 1.x FastMCP class if an older SDK is installed.
@@ -15,18 +15,19 @@ dependencies = [
     "pyyaml>=6.0",
 ]
 
-[project.optional-dependencies]
-dev = ["pytest>=8", "pytest-asyncio>=0.23"]
-
 [project.scripts]
 pahra-companion = "pahra_companion.server:main"
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+[tool.poetry]
+packages = [{ include = "pahra_companion" }]
 
-[tool.hatch.build.targets.wheel]
-packages = ["pahra_companion"]
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8"
+pytest-asyncio = ">=0.23"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

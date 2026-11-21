@@ -32,7 +32,7 @@ The whole run takes under 3 minutes.
    * **LG / Samsung at the venue:** use a phone hotspot and the manual DNS guide instead.
 5. **Explanations cached.** With `GEMINI_API_KEY` in `backend\.env`, run this so cards never wait on Gemini live:
    ```powershell
-   cd backend; .\.venv\Scripts\python -m devtools.prewarm
+   cd backend; poetry run python -m devtools.prewarm
    ```
 6. **Backup video:** record one full run and keep it open in a tab.
 

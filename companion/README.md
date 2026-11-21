@@ -10,22 +10,23 @@ The Pahra backend spawns it over **stdio**, and a Gemini agent uses its tools. I
 
 ## Install and run
 
-Python 3.11+ is required.
+Python 3.11+ and [Poetry](https://python-poetry.org/) 2 are required (`pipx install poetry`). Dependencies are pinned in `poetry.lock`.
 
 ```powershell
 cd companion
-py -3.12 -m venv .venv
-.\.venv\Scripts\python -m pip install -e ".[dev]"
-.\.venv\Scripts\pahra-companion                          # stdio (what the backend uses)
-.\.venv\Scripts\pahra-companion --http 127.0.0.1:8765    # streamable HTTP at http://127.0.0.1:8765/mcp
-.\.venv\Scripts\python -m pytest                         # tests
+poetry install                                           # creates .venv here (see poetry.toml) from poetry.lock
+poetry run pahra-companion                               # stdio (what the backend uses)
+poetry run pahra-companion --http 127.0.0.1:8765         # streamable HTTP at http://127.0.0.1:8765/mcp
+poetry run pytest                                        # tests
 ```
+
+To add or upgrade a package, use `poetry add <pkg>` or `poetry update <pkg>`, then commit `pyproject.toml` and `poetry.lock`.
 
 **MCP Inspector:**
 
 * Run `npx @modelcontextprotocol/inspector`.
 * Choose transport "Streamable HTTP" and URL `http://127.0.0.1:8765/mcp`.
-* Or choose stdio with command `.venv\Scripts\pahra-companion`.
+* Or choose stdio with command `.venv\Scripts\python` and arguments `-m pahra_companion`.
 
 `--http` refuses non-loopback addresses, so the mutating tools are never exposed to the LAN.
 

@@ -35,14 +35,15 @@ After installing once (below), one command opens everything in separate windows:
 
 ## Run locally (no VM needed)
 
+Python dependencies are managed with [Poetry](https://python-poetry.org/) 2 (`pipx install poetry`). Each of `backend/` and `companion/` has its own `pyproject.toml` and committed `poetry.lock`, and `poetry install` makes a `.venv` inside that folder (`poetry.toml`), which the scripts rely on. To change a dependency, run `poetry add <pkg>` or `poetry update <pkg>` and commit both files.
+
 Each block runs in its own terminal.
 
 **Backend:**
 
 ```powershell
 cd backend
-py -3.12 -m venv .venv
-.\.venv\Scripts\python -m pip install -e ".[dev]"
+poetry install
 copy .env.example .env      # then set ADGUARD_URL=http://127.0.0.1:3100 for the fake
 ```
 
@@ -50,22 +51,21 @@ copy .env.example .env      # then set ADGUARD_URL=http://127.0.0.1:3100 for the
 
 ```powershell
 cd backend
-.\.venv\Scripts\python -m devtools.fake_adguard --port 3100
+poetry run python -m devtools.fake_adguard --port 3100
 ```
 
 **API.** It spawns the companion automatically if `companion\.venv` exists:
 
 ```powershell
 cd backend
-.\.venv\Scripts\uvicorn pahra.main:create_app --factory --port 8000
+poetry run uvicorn pahra.main:create_app --factory --port 8000
 ```
 
 **Companion.** The TV assistant needs it:
 
 ```powershell
 cd companion
-py -3.12 -m venv .venv
-.\.venv\Scripts\python -m pip install -e ".[dev]"
+poetry install
 winget install Google.PlatformTools   # adb, for Android / Google / Fire TV automation
 ```
 
@@ -86,7 +86,7 @@ To try it:
 
 For the real VM, follow [infra/README.md](infra/README.md), run `infra\tunnel.ps1`, and keep `ADGUARD_URL=http://127.0.0.1:3000`.
 
-**Before a demo:** with `GEMINI_API_KEY` set, run `.\.venv\Scripts\python -m devtools.prewarm` in `backend`. It caches explanations for the demo devices' domains, so cards never wait on Gemini. It never blocks anything.
+**Before a demo:** with `GEMINI_API_KEY` set, run `poetry run python -m devtools.prewarm` in `backend`. It caches explanations for the demo devices' domains, so cards never wait on Gemini. It never blocks anything.
 
 ## Connect my TV
 
@@ -128,8 +128,8 @@ Suggestion cards also use Gemini. For those, only the domain name and public clu
 ## Tests
 
 ```powershell
-cd backend;   .\.venv\Scripts\python -m pytest -q
-cd companion; .\.venv\Scripts\python -m pytest -q
+cd backend;   poetry run pytest -q
+cd companion; poetry run pytest -q
 cd frontend;  npm run build
 ```
 

@@ -20,14 +20,14 @@ $fe = Join-Path $root "frontend"
 $py = Join-Path $be ".venv\Scripts\python.exe"
 
 if (-not (Test-Path $py)) {
-    throw "Backend venv missing. Run: cd backend; py -3.12 -m venv .venv; .\.venv\Scripts\python -m pip install -e "".[dev]"""
+    throw "Backend venv missing. Run: cd backend; poetry install   (Poetry 2: pipx install poetry)"
 }
 if (-not (Test-Path (Join-Path $fe "node_modules"))) {
     Write-Host "Installing dashboard packages (first run)..."
     Push-Location $fe; npm install; Pop-Location
 }
-if (-not (Test-Path (Join-Path $root "companion\.venv\Scripts\pahra-companion.exe"))) {
-    Write-Warning "Companion not installed: the 'Connect my TV' assistant will be off. See companion\README.md."
+if (-not (Test-Path (Join-Path $root "companion\.venv\Scripts\python.exe"))) {
+    Write-Warning "Companion not installed (cd companion; poetry install): the 'Connect my TV' assistant will be off. See companion\README.md."
 }
 
 $pw = Get-Command pwsh -ErrorAction SilentlyContinue
