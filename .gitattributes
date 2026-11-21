@@ -1,0 +1,5 @@
+# Files that run or are read on the Linux VM must keep LF, even in a Windows clone
+*.sh        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+Caddyfile   text eol=lf
