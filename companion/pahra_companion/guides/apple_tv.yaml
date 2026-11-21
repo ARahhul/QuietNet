@@ -1,0 +1,28 @@
+# Apple TV (tvOS). Hand-written, not checked on a device: `verified: false`.
+platform: apple_tv
+title: Apple TV
+automatable: false
+summary: >-
+  tvOS has no ADB. Its Settings take a plain DNS server address (IP only, no hostname),
+  typed in by hand.
+limitations:
+  - No ADB or remote shell. Pahra cannot change tvOS settings.
+  - The Settings app takes only DNS server IP addresses, not a DoT hostname.
+  - tvOS may accept encrypted-DNS configuration profiles installed with Apple Configurator on a Mac. Pahra has not tested this.
+options:
+  - id: apple_tv_manual_dns
+    kind: manual_dns_tv
+    title: Type the DNS server into the Apple TV's network settings
+    automatable: false
+    gives_per_device_identity: false
+    needs: [dns_server_ip]
+    notes: []
+    variants:
+      - label: tvOS 14 and newer
+        brands: [apple]
+        verified: false
+        steps:
+          - Open Settings, then Network.
+          - Select Wi-Fi and then your network (or Ethernet if the Apple TV uses a cable).
+          - Choose Configure DNS and set it to Manual.
+          - Enter {dns_server_ip} and choose Done.

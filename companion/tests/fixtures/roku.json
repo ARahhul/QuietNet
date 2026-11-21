@@ -1,0 +1,9 @@
+{
+  "_comment": "Synthetic Roku evidence; not a capture.",
+  "ip": "192.168.1.35",
+  "mac": "b0:a7:37:01:02:03",
+  "open_ports": [8060],
+  "ssdp": [{"st": "roku:ecp", "server": "Roku/9.4.0 UPnP/1.0 Roku/9.4.0", "location": "http://192.168.1.35:8060/",
+            "description": {"friendly_name": "Roku Express", "manufacturer": "Roku", "model_name": "Roku Express"}}],
+  "mdns": []
+}

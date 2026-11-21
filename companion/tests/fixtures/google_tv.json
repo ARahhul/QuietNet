@@ -1,0 +1,20 @@
+{
+  "_comment": "Synthetic evidence modelled on a Chromecast with Google TV (randomised MAC, Wireless debugging on); not a capture.",
+  "ip": "192.168.1.33",
+  "mac": "da:a1:19:12:34:56",
+  "alive": true,
+  "open_ports": [8008, 8009],
+  "ssdp": [
+    {
+      "st": "urn:dial-multiscreen-org:service:dial:1",
+      "server": "Linux/5.4 UPnP/1.0 Portable SDK for UPnP devices/1.6.18",
+      "description": {"friendly_name": "Living Room TV", "manufacturer": "Google Inc.", "model_name": "Chromecast"}
+    }
+  ],
+  "mdns": [
+    {"type": "_googlecast._tcp", "name": "Chromecast-HD-0a1b2c", "port": 8009, "txt": {"md": "Chromecast HD", "fn": "Living Room TV"}},
+    {"type": "_androidtvremote2._tcp", "name": "Living Room TV", "port": 6466, "txt": {}},
+    {"type": "_adb-tls-connect._tcp", "name": "adb-0A1B2C3D-xYz", "port": 39457, "txt": {}},
+    {"type": "_adb-tls-pairing._tcp", "name": "adb-0A1B2C3D-xYz", "port": 41231, "txt": {}}
+  ]
+}

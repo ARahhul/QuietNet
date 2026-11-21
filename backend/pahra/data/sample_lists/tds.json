@@ -1,0 +1,238 @@
+{
+ "trackers": {
+  "amazon-adsystem.com": {
+   "domain": "amazon-adsystem.com",
+   "owner": {
+    "name": "Amazon Technologies, Inc.",
+    "displayName": "Amazon.com",
+    "privacyPolicy": "https://www.amazon.com/gp/help/customer/display.html?nodeId=468496",
+    "url": "http://www.amazon.com/"
+   },
+   "categories": [
+    "Ad Motivated Tracking",
+    "Advertising"
+   ],
+   "default": "block"
+  },
+  "amazon.com": {
+   "domain": "amazon.com",
+   "owner": {
+    "name": "Amazon Technologies, Inc.",
+    "displayName": "Amazon.com",
+    "privacyPolicy": "https://www.amazon.com/gp/help/customer/display.html?nodeId=468496",
+    "url": "http://www.amazon.com/"
+   },
+   "categories": [
+    "Ad Motivated Tracking",
+    "Analytics",
+    "Embedded Content",
+    "Online Payment",
+    "SSO",
+    "Third-Party Analytics Marketing"
+   ],
+   "default": "ignore"
+  },
+  "bing.com": {
+   "domain": "bing.com",
+   "owner": {
+    "name": "Microsoft Corporation",
+    "displayName": "Microsoft",
+    "privacyPolicy": "https://privacy.microsoft.com/en-us/privacystatement"
+   },
+   "categories": [
+    "Action Pixels",
+    "Ad Fraud",
+    "Ad Motivated Tracking",
+    "Advertising",
+    "Embedded Content"
+   ],
+   "default": "block"
+  },
+  "doubleclick.net": {
+   "domain": "doubleclick.net",
+   "owner": {
+    "name": "Google Ads",
+    "displayName": "Google Ads (Google)",
+    "localizedName": "Google Ads",
+    "ownedBy": "Google LLC"
+   },
+   "categories": [
+    "Ad Motivated Tracking",
+    "Advertising"
+   ],
+   "default": "block"
+  },
+  "facebook.net": {
+   "domain": "facebook.net",
+   "owner": {
+    "name": "Facebook, Inc.",
+    "displayName": "Facebook",
+    "privacyPolicy": "https://www.facebook.com/privacy/explanation",
+    "url": "https://facebook.com"
+   },
+   "categories": [
+    "Action Pixels",
+    "Ad Fraud",
+    "Ad Motivated Tracking",
+    "Advertising",
+    "Analytics",
+    "Audience Measurement",
+    "Badge",
+    "Embedded Content",
+    "Federated Login",
+    "Social - Comment",
+    "Social - Share",
+    "Social Network"
+   ],
+   "default": "ignore"
+  },
+  "google-analytics.com": {
+   "domain": "google-analytics.com",
+   "owner": {
+    "name": "Google Analytics",
+    "displayName": "Google Analytics (Google)",
+    "localizedName": "Google Analytics",
+    "ownedBy": "Google LLC"
+   },
+   "categories": [
+    "Advertising",
+    "Analytics",
+    "Audience Measurement",
+    "Third-Party Analytics Marketing"
+   ],
+   "default": "block"
+  },
+  "google.com": {
+   "domain": "google.com",
+   "owner": {
+    "name": "Google LLC",
+    "displayName": "Google",
+    "privacyPolicy": "https://policies.google.com/privacy?hl=en&gl=us",
+    "url": "http://www.google.com/"
+   },
+   "categories": [
+    "Ad Motivated Tracking",
+    "Advertising",
+    "Content Delivery",
+    "Online Payment"
+   ],
+   "default": "ignore"
+  },
+  "googlesyndication.com": {
+   "domain": "googlesyndication.com",
+   "owner": {
+    "name": "Google Ads",
+    "displayName": "Google Ads (Google)",
+    "localizedName": "Google Ads",
+    "ownedBy": "Google LLC"
+   },
+   "categories": [
+    "Ad Motivated Tracking",
+    "Advertising"
+   ],
+   "default": "block"
+  },
+  "gstatic.com": {
+   "domain": "gstatic.com",
+   "owner": {
+    "name": "Google LLC",
+    "displayName": "Google",
+    "privacyPolicy": "https://policies.google.com/privacy?hl=en&gl=us",
+    "url": "http://www.google.com/"
+   },
+   "categories": [
+    "Content Delivery",
+    "Embedded Content"
+   ],
+   "default": "ignore"
+  },
+  "scorecardresearch.com": {
+   "domain": "scorecardresearch.com",
+   "owner": {
+    "name": "comScore, Inc",
+    "displayName": "comScore",
+    "privacyPolicy": "https://www.comscore.com/About/Privacy-Policy"
+   },
+   "categories": [
+    "Analytics",
+    "Audience Measurement"
+   ],
+   "default": "block"
+  },
+  "tiktok.com": {
+   "domain": "tiktok.com",
+   "owner": {
+    "name": "ByteDance Ltd.",
+    "displayName": "ByteDance"
+   },
+   "categories": [],
+   "default": "block"
+  },
+  "youtube.com": {
+   "domain": "youtube.com",
+   "owner": {
+    "name": "Youtube",
+    "displayName": "Youtube (Google)",
+    "localizedName": "Youtube",
+    "ownedBy": "Google LLC"
+   },
+   "categories": [
+    "Ad Motivated Tracking",
+    "Content Delivery",
+    "Embedded Content"
+   ],
+   "default": "ignore"
+  },
+  "facebook.com": {
+   "domain": "facebook.com",
+   "owner": {
+    "name": "Facebook, Inc.",
+    "displayName": "Facebook",
+    "privacyPolicy": "https://www.facebook.com/privacy/explanation",
+    "url": "https://facebook.com"
+   },
+   "categories": [
+    "Action Pixels",
+    "Ad Fraud",
+    "Ad Motivated Tracking",
+    "Advertising",
+    "Analytics",
+    "Audience Measurement",
+    "Badge",
+    "Embedded Content",
+    "Federated Login",
+    "Social - Comment",
+    "Social - Share",
+    "Social Network"
+   ],
+   "default": "ignore"
+  }
+ },
+ "domains": {
+  "android.com": "Google LLC",
+  "app-measurement.com": "Google LLC",
+  "crashlytics.com": "Google LLC",
+  "doubleclick.net": "Google Ads",
+  "google-analytics.com": "Google Analytics",
+  "google.com": "Google LLC",
+  "googleapis.com": "Google Ads",
+  "googlesyndication.com": "Google Ads",
+  "googlevideo.com": "Youtube",
+  "gstatic.com": "Google LLC",
+  "youtube.com": "Youtube",
+  "appcenter.ms": "Microsoft Corporation",
+  "bing.com": "Microsoft Corporation",
+  "amazon-adsystem.com": "Amazon Technologies, Inc.",
+  "amazon.com": "Amazon Technologies, Inc.",
+  "amazonaws.com": "Amazon Technologies, Inc.",
+  "primevideo.com": "Amazon Technologies, Inc.",
+  "icloud.com": "Apple Inc.",
+  "mopub.com": "AppLovin Corporation",
+  "facebook.com": "Facebook, Inc.",
+  "facebook.net": "Facebook, Inc.",
+  "whatsapp.net": "Facebook, Inc.",
+  "mixpanel.com": "Mixpanel, Inc.",
+  "scorecardresearch.com": "comScore, Inc",
+  "tiktok.com": "ByteDance Ltd."
+ }
+}

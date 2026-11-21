@@ -1,0 +1,58 @@
+# Amazon Fire TV (Fire TV Stick, Stick 4K / 4K Max, Fire TV Cube, Fire TV Edition TVs).
+# Hand-written, not yet checked on hardware: every variant is `verified: false`.
+platform: fire_tv
+title: Amazon Fire TV
+automatable: true
+summary: >-
+  Fire OS 7 (Android 9) and newer accept Private DNS over ADB. Older Fire OS 5/6
+  (Android 5.1/7.1) do not, so use the manual or router options there.
+limitations:
+  - Fire TV Settings has no Private DNS option, so it can only be set over ADB.
+  - Fire OS 5 and 6 are older than Android 9 (SDK < 28) and have no Private DNS at all.
+  - Some Fire OS builds may accept the setting but not use it. Pahra checks its DNS log after setting it and falls back if no queries arrive.
+options:
+  - id: fire_tv_adb_private_dns
+    kind: adb_private_dns
+    title: Let Pahra set Private DNS over ADB (automatic)
+    automatable: true
+    gives_per_device_identity: true
+    needs: [hostname]
+    notes:
+      - The first time Pahra connects, the Fire TV asks "Allow USB debugging?". Tick "Always allow from this computer" and choose OK.
+      - You can switch ADB debugging off again afterwards. The Private DNS setting stays.
+    variants:
+      - label: Fire OS 7/8 (Developer Options hidden)
+        brands: []
+        verified: false
+        steps:
+          - Open Settings (gear icon on the home screen), then My Fire TV, then About.
+          - Select your device name (the first row, e.g. "Fire TV Stick 4K") 7 times, until "No need, you are already a developer" appears.
+          - Go back to My Fire TV. Developer Options is now in the list. Open it.
+          - Turn on ADB debugging.
+          - "Find the IP address: Settings, My Fire TV, About, Network."
+          - Tell Pahra you are done. When the Fire TV asks "Allow USB debugging?", choose Always allow, then OK.
+      - label: Older Fire OS (Developer Options already visible)
+        brands: []
+        verified: false
+        steps:
+          - Open Settings, then My Fire TV (called Device or System on older versions).
+          - Open Developer Options and turn on ADB debugging.
+          - Tell Pahra you are done. When the Fire TV asks "Allow USB debugging?", choose Always allow, then OK.
+  - id: fire_tv_manual_dns
+    kind: manual_dns_tv
+    title: Type a DNS server into the Fire TV's Wi-Fi settings
+    automatable: false
+    gives_per_device_identity: false
+    needs: [dns_server_ip, gateway_ip]
+    notes:
+      - Fire TV only shows the Advanced (static IP) fields while joining a network, so you have to forget and rejoin it. Have the Wi-Fi password ready.
+    variants:
+      - label: Fire OS 6-8
+        brands: []
+        verified: false
+        steps:
+          - "Write down the Fire TV's IP address: Settings, My Fire TV, About, Network."
+          - Open Settings, then Network. Highlight your Wi-Fi network and press the Menu (three lines) button to forget it.
+          - Select the network again, enter the password, and choose Advanced.
+          - "Enter: IP address = the one you wrote down, Gateway = {gateway_ip}, Network prefix length = 24, DNS 1 = {dns_server_ip}, DNS 2 = {dns_server_ip}."
+          - Choose Connect.

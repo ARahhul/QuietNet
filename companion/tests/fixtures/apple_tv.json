@@ -1,0 +1,8 @@
+{
+  "_comment": "Synthetic Apple TV evidence; not a capture.",
+  "ip": "192.168.1.36",
+  "mac": "02:11:22:33:44:55",
+  "open_ports": [7000],
+  "ssdp": [],
+  "mdns": [{"type": "_airplay._tcp", "name": "Living Room", "port": 7000, "txt": {"model": "AppleTV14,1"}}]
+}

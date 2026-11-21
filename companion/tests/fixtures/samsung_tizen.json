@@ -1,0 +1,24 @@
+{
+  "_comment": "Synthetic evidence modelled on a 2022 Samsung Tizen TV; not a capture from real hardware.",
+  "ip": "192.168.1.32",
+  "mac": "f4:7b:5e:aa:bb:cc",
+  "alive": true,
+  "open_ports": [8001, 8002, 7000],
+  "ssdp": [
+    {
+      "st": "urn:samsung.com:device:RemoteControlReceiver:1",
+      "server": "SHP, UPnP/1.0, Samsung UPnP SDK/1.0",
+      "location": "http://192.168.1.32:7676/rcr/",
+      "description": {
+        "friendly_name": "[TV] Samsung Q60 Series (55)",
+        "manufacturer": "Samsung Electronics",
+        "model_name": "QA55Q60BAKLXL",
+        "device_type": "urn:samsung.com:device:RemoteControlReceiver:1",
+        "device_types": ["urn:samsung.com:device:RemoteControlReceiver:1"]
+      }
+    }
+  ],
+  "mdns": [
+    {"type": "_airplay._tcp", "name": "Samsung Q60 Series (55)", "port": 7000, "txt": {"manufacturer": "Samsung", "model": "QA55Q60B"}}
+  ]
+}

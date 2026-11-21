@@ -1,0 +1,16 @@
+{
+	auto_https off
+}
+
+{$DNS_HOST}:443 {
+	tls /etc/letsencrypt/live/{$DNS_HOST}/fullchain.pem /etc/letsencrypt/live/{$DNS_HOST}/privkey.pem
+
+	@doh path /dns-query /dns-query/*
+	handle @doh {
+		# AdGuard reads the ClientID from /dns-query/<client-id>; it trusts X-Forwarded-For from trusted_proxies
+		reverse_proxy adguardhome:3000
+	}
+	handle {
+		respond 404
+	}
+}

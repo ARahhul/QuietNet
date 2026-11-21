@@ -1,0 +1,32 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "fake-adguard",
+      "runtimeExecutable": "C:\\Projects\\pahra\\backend\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["-m", "devtools.fake_adguard", "--port", "3100"],
+      "cwd": "C:\\Projects\\pahra\\backend",
+      "port": 3100
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "C:\\Projects\\pahra\\backend\\.venv\\Scripts\\uvicorn.exe",
+      "runtimeArgs": ["pahra.main:create_app", "--factory", "--port", "8000"],
+      "cwd": "C:\\Projects\\pahra\\backend",
+      "env": {
+        "ADGUARD_URL": "http://127.0.0.1:3100",
+        "OFFLINE_LISTS": "true",
+        "DB_PATH": "pahra-dev.db",
+        "VM_IP": "203.0.113.10"
+      },
+      "port": 8000
+    },
+    {
+      "name": "dashboard",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "C:\\Projects\\pahra\\frontend",
+      "port": 5173
+    }
+  ]
+}

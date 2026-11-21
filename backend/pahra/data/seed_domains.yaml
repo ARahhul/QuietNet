@@ -1,0 +1,103 @@
+# Hand-written plain-language explanations for common TV/phone trackers.
+# Used instead of an LLM call for these domains (fast, works offline, consistent on stage).
+# Confidence is NOT taken from here: it is always computed from real list/Tracker Radar hits.
+alphonso.tv:
+  category: tracking
+  owner: Alphonso (LG Ad Solutions)
+  what_it_does: Recognises what is playing on your TV screen and uses it to target ads.
+  break_risk: low
+  break_note: TV and apps keep working.
+  acr: true
+lgsmartad.com:
+  category: ads
+  owner: LG Electronics
+  what_it_does: Serves and measures the ads shown on your LG TV's home screen.
+  break_risk: low
+  break_note: Home-screen ad tiles may go blank. Apps keep working.
+samsungacr.com:
+  category: tracking
+  owner: Samsung Electronics
+  what_it_does: Samsung's content recognition. Reports what you watch so ads can be targeted.
+  break_risk: low
+  break_note: TV and apps keep working.
+  acr: true
+acr0.samsungcloudsolution.com:
+  category: tracking
+  owner: Samsung Electronics
+  what_it_does: Sends viewing data (what is on screen) from your Samsung TV.
+  break_risk: low
+  break_note: TV and apps keep working.
+  acr: true
+samsungads.com:
+  category: ads
+  owner: Samsung Ads
+  what_it_does: Samsung's ad network. Serves and tracks ads on the TV.
+  break_risk: low
+  break_note: Ad tiles may go blank.
+samsungadhub.com:
+  category: ads
+  owner: Samsung Ads
+  what_it_does: Delivers ads to Samsung TVs and records which ones you saw.
+  break_risk: low
+  break_note: Ad tiles may go blank.
+samba.tv:
+  category: tracking
+  owner: Samba TV
+  what_it_does: Recognises what you watch on your TV and sells the data for advertising.
+  break_risk: low
+  break_note: TV keeps working.
+  acr: true
+doubleclick.net:
+  category: ads
+  owner: Google
+  what_it_does: Google's ad network. Shows ads and tracks which ads you see across apps and websites.
+  break_risk: low
+  break_note: Ads disappear. A few "sponsored" links may not open.
+googlesyndication.com:
+  category: ads
+  owner: Google
+  what_it_does: Delivers Google ads inside websites and apps.
+  break_risk: low
+  break_note: Ads disappear.
+google-analytics.com:
+  category: tracking
+  owner: Google
+  what_it_does: Records how you use websites and apps, for the site owner's statistics.
+  break_risk: low
+  break_note: Websites keep working.
+app-measurement.com:
+  category: tracking
+  owner: Google (Firebase)
+  what_it_does: Firebase Analytics. Apps report what you tap and how long you use them.
+  break_risk: low
+  break_note: Apps keep working.
+amazon-adsystem.com:
+  category: ads
+  owner: Amazon
+  what_it_does: Amazon's ad network. Shows and measures ads on Fire TV, apps and websites.
+  break_risk: low
+  break_note: Ads disappear. Fire TV keeps working.
+device-metrics-us.amazon.com:
+  category: telemetry
+  owner: Amazon
+  what_it_does: Sends usage data from your Fire TV or Echo back to Amazon.
+  break_risk: low
+  break_note: Fire TV keeps working.
+device-metrics-us-2.amazon.com:
+  category: telemetry
+  owner: Amazon
+  what_it_does: Sends usage data from your Fire TV or Echo back to Amazon.
+  break_risk: low
+  break_note: Fire TV keeps working.
+metrics.icloud.com:
+  category: telemetry
+  owner: Apple
+  what_it_does: Sends iCloud usage statistics back to Apple.
+  break_risk: low
+  break_note: iCloud keeps working.
+scorecardresearch.com:
+  category: tracking
+  owner: Comscore
+  what_it_does: Measures which sites and videos you visit, for audience research.
+  break_risk: low
+  break_note: Websites keep working.

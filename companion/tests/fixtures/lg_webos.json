@@ -1,0 +1,26 @@
+{
+  "_comment": "Synthetic evidence modelled on a 2021 LG webOS TV; not a capture from real hardware.",
+  "ip": "192.168.1.31",
+  "mac": "a8:23:fe:12:34:56",
+  "alive": true,
+  "open_ports": [3000, 3001, 7000],
+  "ssdp": [
+    {
+      "st": "urn:lge-com:service:webos-second-screen:1",
+      "usn": "uuid:0a1b2c3d-0000-0000-0000-a823fe123456::urn:lge-com:service:webos-second-screen:1",
+      "server": "WebOS/4.1.0 UPnP/1.0",
+      "location": "http://192.168.1.31:1453/",
+      "description": {
+        "friendly_name": "[LG] webOS TV OLED55C1PTB",
+        "manufacturer": "LG Electronics",
+        "model_name": "OLED55C1PTB",
+        "device_type": "urn:schemas-upnp-org:device:Basic:1",
+        "device_types": ["urn:schemas-upnp-org:device:Basic:1"]
+      }
+    },
+    {"st": "urn:dial-multiscreen-org:service:dial:1", "server": "Linux/4.4.84 UPnP/1.0 LGE WebOS TV LGE_DLNA_SDK/1.6.0"}
+  ],
+  "mdns": [
+    {"type": "_airplay._tcp", "name": "[LG] webOS TV OLED55C1PTB", "port": 7000, "txt": {"manufacturer": "LG Electronics", "model": "OLED55C1PTB"}}
+  ]
+}

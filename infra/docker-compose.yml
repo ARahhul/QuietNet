@@ -1,0 +1,20 @@
+# Pahra cloud DNS gateway (runs on the VM). The admin API/UI is bound to 127.0.0.1:3000
+# so it is only reachable through the SSH tunnel from the laptop:
+#   ssh -N -L 3000:127.0.0.1:3000 ubuntu@<VM_IP>
+services:
+  adguardhome:
+    image: adguard/adguardhome:latest
+    container_name: pahra-dns-gateway
+    restart: unless-stopped
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "443:443/tcp"       # DoH  https://dns.<domain>/dns-query/<client-id>
+      - "443:443/udp"       # DoH over HTTP/3
+      - "853:853/tcp"       # DoT  <client-id>.dns.<domain>
+      - "853:853/udp"       # DoQ
+      - "127.0.0.1:3000:3000/tcp"  # admin API, localhost only (SSH tunnel)
+    volumes:
+      - ./agd-work:/opt/adguardhome/work
+      - ./agd-conf:/opt/adguardhome/conf
+      - /etc/letsencrypt:/etc/letsencrypt:ro

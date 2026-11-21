@@ -1,0 +1,143 @@
+"""Polls AdGuard's query log every N seconds and feeds new traffic into the pipeline.
+
+The cursor (newest processed entry time) is stored in SQLite, so when the laptop
+sleeps and comes back, polling resumes where it left off (AdGuard keeps 24 h of logs).
+"""
+
+import asyncio
+import logging
+import sqlite3
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from typing import Awaitable, Callable
+
+from .adguard.client import AdGuardClient, AdGuardError
+from .db import get_meta, set_meta
+from .events import ingest_event
+from .pipeline.normalize import normalize_domain
+from .timeutil import parse_ag_time, to_iso
+
+log = logging.getLogger("pahra.poller")
+
+PAGE = 500
+MAX_PAGES = 20
+FIRST_RUN_WINDOW = timedelta(hours=1)
+
+
+@dataclass
+class Observed:
+    """A (device, normalised domain) pair seen in this poll, with the raw names that mapped to it."""
+
+    device_id: str
+    domain: str
+    qnames: set[str] = field(default_factory=set)
+    is_new: bool = False
+    max_gap_s: float = 0.0  # longest quiet period before a query in this poll ("tracker came back")
+
+
+class Poller:
+    def __init__(
+        self,
+        conn: sqlite3.Connection,
+        ag: AdGuardClient,
+        interval_s: int,
+        on_observed: Callable[[list[Observed]], Awaitable[None]] | None = None,
+        on_tick: Callable[[], Awaitable[None]] | None = None,
+    ):
+        self.conn = conn
+        self.ag = ag
+        self.interval_s = interval_s
+        self.on_observed = on_observed
+        self.on_tick = on_tick
+        self.last_poll: str | None = None
+        self.last_error: str | None = None
+        self._wake = asyncio.Event()
+
+    def poke(self) -> None:
+        """Poll now instead of waiting for the next tick (e.g. right after a device is added)."""
+        self._wake.set()
+
+    async def run_forever(self) -> None:
+        while True:
+            try:
+                observed = await self.poll_once()
+                if observed and self.on_observed:
+                    await self.on_observed(observed)
+                if self.on_tick:
+                    await self.on_tick()
+                self.last_error = None
+            except AdGuardError as e:
+                self.last_error = str(e)
+                log.warning("poll failed: %s", e)
+            except Exception:  # keep the loop alive; log the bug
+                log.exception("poller iteration crashed")
+            try:
+                await asyncio.wait_for(self._wake.wait(), timeout=self.interval_s)
+            except asyncio.TimeoutError:
+                pass
+            self._wake.clear()
+
+    async def _fetch_new(self, cursor: datetime | None) -> list[dict]:
+        out: list[dict] = []
+        older: str | None = None
+        floor = None if cursor else datetime.now(timezone.utc) - FIRST_RUN_WINDOW
+        for _ in range(MAX_PAGES):
+            data = await self.ag.querylog(older_than=older, limit=PAGE) or {}
+            batch = data.get("data") or []
+            if not batch:
+                break
+            stop = False
+            for e in batch:
+                t = parse_ag_time(e["time"])
+                if (cursor and t <= cursor) or (floor and t < floor):
+                    stop = True
+                    break
+                e["_t"] = t
+                out.append(e)
+            if stop or len(batch) < PAGE:
+                break
+            older = data.get("oldest") or batch[-1]["time"]
+        return out
+
+    def _device_maps(self) -> tuple[dict[str, str], dict[str, str]]:
+        by_cid, by_ip = {}, {}
+        for r in self.conn.execute("SELECT id, client_id, linked_ip FROM devices"):
+            by_cid[r["client_id"]] = r["id"]
+            if r["linked_ip"]:
+                by_ip[r["linked_ip"]] = r["id"]
+        return by_cid, by_ip
+
+    async def poll_once(self) -> list[Observed]:
+        cursor_s = get_meta(self.conn, "querylog_cursor")
+        cursor = parse_ag_time(cursor_s) if cursor_s else None
+        entries = await self._fetch_new(cursor)
+        self.last_poll = to_iso(datetime.now(timezone.utc))
+        if not entries:
+            return []
+
+        by_cid, by_ip = self._device_maps()
+        observed: dict[tuple[str, str], Observed] = {}
+        last_seen: dict[str, datetime] = {}
+        entries.sort(key=lambda e: e["_t"])
+        for e in entries:
+            cid = e.get("client_id") or (e.get("client_info") or {}).get("name") or ""
+            dev = by_cid.get(cid) or by_ip.get(e.get("client", ""))
+            if not dev:
+                continue
+            qname = ((e.get("question") or {}).get("name") or "").lower().strip(".")
+            if not qname:
+                continue
+            domain = normalize_domain(qname)
+            blocked = str(e.get("reason", "")).startswith("Filtered")
+            gap = ingest_event(self.conn, dev, domain, e["_t"], blocked)
+            ob = observed.setdefault((dev, domain), Observed(dev, domain))
+            ob.qnames.add(qname)
+            ob.is_new = ob.is_new or gap is None
+            ob.max_gap_s = max(ob.max_gap_s, gap or 0.0)
+            last_seen[dev] = e["_t"]
+
+        for dev, t in last_seen.items():
+            self.conn.execute("UPDATE devices SET last_seen = ? WHERE id = ?", (to_iso(t), dev))
+        newest = max(entries, key=lambda e: e["_t"])
+        set_meta(self.conn, "querylog_cursor", newest["time"])
+        return list(observed.values())

@@ -1,0 +1,71 @@
+# Google TV: Chromecast with Google TV, Google TV Streamer, and TVs with the Google TV launcher
+# (Sony BRAVIA XR 2021+, TCL, Hisense, Xiaomi and others).
+# Hand-written, not yet checked on hardware: every variant is `verified: false`.
+platform: google_tv
+title: Google TV
+automatable: true
+summary: >-
+  Google TV runs Android TV OS 10 or newer, so Private DNS works when written over ADB.
+  Google TV 12+ also offers Wireless debugging with a pairing code.
+limitations:
+  - Google TV Settings has no Private DNS option, so it can only be set over ADB.
+  - Some builds turn off network ADB on 5555 and offer only Wireless debugging (pairing code, random port).
+options:
+  - id: google_tv_adb_private_dns
+    kind: adb_private_dns
+    title: Let Pahra set Private DNS over ADB (automatic)
+    automatable: true
+    gives_per_device_identity: true
+    needs: [hostname]
+    notes:
+      - The first time Pahra connects, the TV asks "Allow USB debugging?". Tick "Always allow from this computer" and choose OK.
+      - You can turn developer options off again afterwards. The Private DNS setting stays.
+    variants:
+      - label: Google TV (generic, incl. Chromecast with Google TV)
+        brands: []
+        verified: false
+        steps:
+          - Select your profile picture (top right), then Settings.
+          - Open System, then About.
+          - Scroll to "Android TV OS build" and press select on it 7 times, until "You are now a developer!" appears.
+          - Go back to System and open Developer options.
+          - Turn on USB debugging.
+          - "Find the TV's IP address: Settings, Network & Internet, then your network."
+          - Tell Pahra you are done. When the TV asks "Allow USB debugging?", choose Always allow, then OK.
+      - label: Sony BRAVIA with Google TV (2021+)
+        brands: [sony]
+        verified: false
+        steps:
+          - Press the Settings (gear) button, or open Settings from the profile menu.
+          - Open System, then About.
+          - Scroll to "Android TV OS build" and press the centre button 7 times.
+          - Go back to System, open Developer options and turn on USB debugging.
+          - Tell Pahra you are done, then accept "Allow USB debugging?" on the TV (Always allow).
+      - label: Google TV 12+ Wireless debugging (pairing code)
+        brands: []
+        min_sdk: 31
+        verified: false
+        steps:
+          - Turn on Developer options as above (Android TV OS build, 7 times).
+          - In System, Developer options, turn on Wireless debugging and open it.
+          - Choose "Pair device with pairing code". The TV shows an IP:port and a 6-digit code.
+          - Give Pahra that IP:port and code. Pahra pairs (adb_pair).
+          - Pahra then connects to the IP:port shown on the main Wireless debugging screen. This is not the pairing port.
+  - id: google_tv_manual_static_dns
+    kind: manual_dns_tv
+    title: Type a DNS server into the TV's network settings
+    automatable: false
+    gives_per_device_identity: false
+    needs: [dns_server_ip, gateway_ip]
+    notes:
+      - Google TV accepts a DNS server only when the connection is set to Static. Write down the current IP address first.
+    variants:
+      - label: Google TV
+        brands: []
+        verified: false
+        steps:
+          - Open Settings, then Network & Internet, then select your Wi-Fi network.
+          - Write down the IP address shown.
+          - Open IP settings and choose Static.
+          - "Enter: IP address = the one you wrote down, Gateway = {gateway_ip}, Network prefix length = 24 (unless yours differs), DNS 1 = {dns_server_ip}, DNS 2 = {dns_server_ip}."
+          - Save.

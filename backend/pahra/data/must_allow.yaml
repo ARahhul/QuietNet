@@ -1,0 +1,55 @@
+# Domains that are never auto-blocked or quarantined (SPEC §4.3).
+# Blocking them manually shows a red warning. Entries match the domain and all subdomains.
+all:
+  # time servers
+  - pool.ntp.org
+  - time.android.com
+  - time.apple.com
+  - time.windows.com
+  - time.google.com
+  # connectivity checks / captive portal detection
+  - connectivitycheck.gstatic.com
+  - connectivitycheck.android.com
+  - captive.apple.com
+  - msftconnecttest.com
+  - msftncsi.com
+  # app stores & push notifications
+  - play.googleapis.com
+  - android.clients.google.com
+  - mtalk.google.com
+  - push.apple.com
+  - apps.apple.com
+  - itunes.apple.com
+  # core streaming
+  - netflix.com
+  - nflxvideo.net
+  - nflximg.net
+  - nflxext.com
+  - nflxso.net
+  - youtube.com
+  - googlevideo.com
+  - ytimg.com
+  - primevideo.com
+  - aiv-cdn.net
+  - media-amazon.com
+  - hotstar.com
+  - jiocinema.com
+  - spotify.com
+  # messaging
+  - whatsapp.net
+  - whatsapp.com
+tv:
+  - snu.lge.com          # LG firmware updates
+  - time.lge.com
+  - samsungotn.net       # Samsung firmware updates
+  - time.samsungcloudsolution.com
+  - softwareupdates.amazon.com
+  - atv-ext.amazon.com
+  - api.amazon.com       # Fire TV sign-in / core services
+phone: []
+laptop:
+  - windowsupdate.com
+  - update.microsoft.com
+  - swscan.apple.com
+router: []
+other: []

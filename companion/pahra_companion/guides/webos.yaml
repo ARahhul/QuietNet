@@ -1,0 +1,51 @@
+# LG webOS TVs. Menu names and positions change between webOS versions; these are
+# hand-written and NOT checked on a real TV yet: every variant is `verified: false`.
+platform: webos
+title: LG webOS TV
+automatable: false
+summary: >-
+  LG webOS cannot be automated: it has no ADB and no Private DNS, DoT or DoH setting.
+  It accepts one plain IPv4 DNS server address, typed in by hand.
+limitations:
+  - No ADB, no remote shell and no API that can change DNS. webOS Developer Mode only sideloads apps.
+  - No Private DNS, DNS-over-TLS or DNS-over-HTTPS. The TV takes only a plain IPv4 DNS server address, so the Pahra hostname cannot be used directly.
+  - Per-device identity needs either a public IP that Pahra can link (not possible behind CGNAT) or the laptop DNS forwarder.
+options:
+  - id: webos_manual_dns
+    kind: manual_dns_tv
+    title: Type the DNS server into the TV's network settings
+    automatable: false
+    gives_per_device_identity: false
+    needs: [dns_server_ip]
+    notes:
+      - When you untick "Set Automatically", LG fills in the current IP address, subnet mask and gateway. Keep those values and change only the DNS server.
+      - "If a menu is not where the steps say, open All Settings and look for Network. LG moves it between versions."
+    variants:
+      - label: webOS 6.0 and newer (2021+ models, webOS 22/23/24)
+        brands: [lg]
+        verified: false
+        steps:
+          - Press the Settings (gear) button on the remote, then choose All Settings.
+          - Open General, then Network.
+          - Open Wi-Fi Connection (or Wired Connection (Ethernet) if the TV uses a cable).
+          - For Wi-Fi, open Advanced Wi-Fi Settings. Choose Edit.
+          - Untick Set Automatically. Leave the IP address, subnet mask and gateway as shown.
+          - Set DNS Server to {dns_server_ip}.
+          - Choose Connect (or Save) and wait for the network check to pass.
+      - label: webOS 4.x-5.x (2018-2020 models)
+        brands: [lg]
+        verified: false
+        steps:
+          - Press the Settings (gear) button, then open All Settings (the three-dot icon at the bottom of the quick menu).
+          - Open Connection (on some models Network), then Wi-Fi Connection.
+          - Open Advanced Wi-Fi Settings and choose Edit.
+          - Untick Set Automatically. Leave the IP address, subnet mask and gateway as shown.
+          - Set DNS Server to {dns_server_ip}, then choose Connect.
+      - label: webOS 3.x and older (2014-2017 models)
+        brands: [lg]
+        verified: false
+        steps:
+          - Press Settings on the remote and open the advanced settings (three dots or "All Settings").
+          - Open Network, then Wi-Fi Connection (or Wired Connection).
+          - Open Advanced Wi-Fi Settings and choose Edit.
+          - Untick Set Automatically and set DNS Server to {dns_server_ip}. Choose Connect.

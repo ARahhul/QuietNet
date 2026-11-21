@@ -1,0 +1,17 @@
+{
+  "_comment": "Synthetic evidence modelled on a Fire TV Stick with ADB debugging on; not a capture.",
+  "ip": "192.168.1.34",
+  "mac": "f0:27:2d:11:22:33",
+  "alive": true,
+  "open_ports": [5555, 8009],
+  "ssdp": [
+    {
+      "st": "urn:dial-multiscreen-org:service:dial:1",
+      "server": "Linux/4.9 UPnP/1.0 Cling/2.0",
+      "description": {"friendly_name": "Bedroom Fire TV", "manufacturer": "Amazon", "model_name": "AFTKA"}
+    }
+  ],
+  "mdns": [
+    {"type": "_amzn-wplay._tcp", "name": "amzn.dmgr:0A1B2C3D4E5F", "port": 41093, "txt": {"n": "Fire TV Stick 4K Max"}}
+  ]
+}

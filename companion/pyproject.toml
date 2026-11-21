@@ -1,0 +1,34 @@
+[project]
+name = "pahra-companion"
+version = "0.1.0"
+description = "Pahra home companion: MCP server that finds TVs on the home LAN and points their DNS at Pahra"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # Official MCP Python SDK. Written against mcp 2.x (MCPServer); server.py
+    # falls back to the 1.x FastMCP class if an older SDK is installed.
+    "mcp>=1.10",
+    "zeroconf>=0.132",
+    "httpx>=0.27",
+    "dnspython>=2.6",
+    "ifaddr>=0.2",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+[project.scripts]
+pahra-companion = "pahra_companion.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pahra_companion"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]

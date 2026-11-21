@@ -1,0 +1,68 @@
+# Router DNS: the router hands the Pahra DNS server to every device on the network over DHCP.
+# The user does this in the router's own admin page. Pahra never logs into the router.
+# Hand-written, not checked on these routers: every variant is `verified: false`.
+platform: router
+title: Home router
+automatable: false
+summary: >-
+  Changing the DNS server your router hands out covers every device at once. Pahra then sees
+  your home's public IP, so this needs a public IP that is yours alone. Behind CGNAT it isn't.
+limitations:
+  - Pahra never logs into your router and never guesses its password. You make the change yourself.
+  - Pahra sees all devices behind the router as one client, unless the router can hand out different DNS servers per device.
+  - "Behind CGNAT (common on JioFiber, Airtel and ACT IPv4) your public IPv4 is shared with other customers and changes. Pahra cannot link it to your home, so router DNS pointed at the Pahra VM does not work reliably."
+  - Some ISP-supplied routers do not let you change the DNS servers at all.
+options:
+  - id: router_dns
+    kind: router_dns
+    title: Change the DNS server your router hands out
+    automatable: false
+    gives_per_device_identity: false
+    needs: [dns_server_ip, gateway_ip]
+    notes:
+      - Do not add a public resolver such as 8.8.8.8 as the secondary DNS. Devices would use it at random and skip Pahra. Leave it empty or repeat {dns_server_ip}.
+      - Devices pick up the new DNS when they renew their DHCP lease. Restart the TV, or turn its Wi-Fi off and on.
+    variants:
+      - label: Any router (generic)
+        brands: []
+        verified: false
+        steps:
+          - Open http://{gateway_ip} in a browser on this laptop and log in with your router's admin password. It is often printed on a label on the router.
+          - Find the LAN or DHCP server settings. Look for "DHCP Server", "LAN Setup" or "LAN IPv4".
+          - Set Primary DNS to {dns_server_ip}. Leave Secondary DNS empty, or set it to the same address.
+          - Save or apply. Some routers restart.
+          - Restart the TV (or turn its Wi-Fi off and on) so it picks up the new DNS.
+      - label: JioFiber
+        brands: [jiofiber]
+        verified: false
+        steps:
+          - Open http://192.168.29.1 (the usual JioFiber address; otherwise use http://{gateway_ip}) and log in as admin. The password is on the router label, unless you changed it.
+          - Look under Network, then LAN (sometimes LAN IPv4 or DHCP) for the DNS server settings.
+          - If there is a DNS field, set it to {dns_server_ip} and save.
+          - Many JioFiber firmware versions do not offer this field. If yours doesn't, use the per-device options instead.
+          - JioFiber IPv4 is usually behind CGNAT. Check the CGNAT verdict before you rely on this.
+      - label: Airtel Xstream Fiber
+        brands: [airtel]
+        verified: false
+        steps:
+          - "Open http://192.168.1.1 (or http://{gateway_ip}) and log in. The password is on the router label. Airtel uses routers from several makers (for example Nokia, ZTE, Huawei), so the menus differ."
+          - Look for LAN, then DHCP Server (or LAN Settings), and find the DNS fields.
+          - Set Primary DNS to {dns_server_ip}, leave Secondary empty or the same, and save.
+          - If the DNS fields are greyed out, Airtel has locked them on your router. Use the per-device options.
+      - label: TP-Link (Archer / Deco web UI)
+        brands: [tp-link]
+        verified: false
+        steps:
+          - Open http://tplinkwifi.net (or http://{gateway_ip}) and log in.
+          - Go to Advanced, then Network, then DHCP Server. On older firmware it is DHCP, then DHCP Settings.
+          - Set Primary DNS to {dns_server_ip}. Leave Secondary DNS empty or the same.
+          - Choose Save.
+          - "Deco mesh: in the Deco app, open More, then Advanced, then DHCP Server, and set the DNS address there."
+      - label: ACT Fibernet
+        brands: [act]
+        verified: false
+        steps:
+          - ACT supplies routers from several makers. Check the label on the router for its brand and admin address (often http://192.168.0.1 or http://192.168.1.1).
+          - Log in, then look for LAN or DHCP Server settings and the DNS fields.
+          - Set Primary DNS to {dns_server_ip}, leave Secondary empty or the same, and save.
+          - If the router is a TP-Link or D-Link model, the TP-Link steps above (or D-Link's Setup, then Network Settings) apply.

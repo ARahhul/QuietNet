@@ -1,0 +1,48 @@
+# Samsung Tizen TVs. Menus change between model years; hand-written and NOT checked on a
+# real TV yet: every variant is `verified: false`.
+platform: tizen
+title: Samsung Tizen TV
+automatable: false
+summary: >-
+  Samsung Tizen cannot be automated: no ADB and no Private DNS, DoT or DoH setting.
+  It lets you set the DNS server by hand while keeping the IP address automatic.
+limitations:
+  - No ADB, no remote shell and no API that can change DNS.
+  - No Private DNS, DNS-over-TLS or DNS-over-HTTPS. The TV takes only a plain IPv4 DNS server address, so the Pahra hostname cannot be used directly.
+  - Per-device identity needs either a public IP that Pahra can link (not possible behind CGNAT) or the laptop DNS forwarder.
+options:
+  - id: tizen_manual_dns
+    kind: manual_dns_tv
+    title: Type the DNS server into the TV's network settings
+    automatable: false
+    gives_per_device_identity: false
+    needs: [dns_server_ip]
+    notes:
+      - Network Status runs a connection test first. Wait for it to finish; IP Settings then appears at the bottom.
+      - Only the DNS setting changes. The IP setting can stay on Obtain automatically.
+    variants:
+      - label: 2022 and newer (Tizen 6.5+)
+        brands: [samsung]
+        verified: false
+        steps:
+          - Press Home, open Settings, then All Settings.
+          - Open Connection, then Network, then Network Status.
+          - When the test finishes, choose IP Settings.
+          - Set DNS Setting to Enter manually.
+          - Choose DNS Server and enter {dns_server_ip}. Choose Done, then OK.
+      - label: 2017-2021 (Tizen 3.0-6.0)
+        brands: [samsung]
+        verified: false
+        steps:
+          - Press Home (or Menu), open Settings, then General.
+          - Open Network, then Network Status.
+          - When the test finishes, choose IP Settings.
+          - Set DNS Setting to Enter manually.
+          - Choose DNS Server and enter {dns_server_ip}. Choose OK.
+      - label: 2015-2016 (Tizen 2.x)
+        brands: [samsung]
+        verified: false
+        steps:
+          - Press Menu on the remote, then open Network.
+          - Open Network Status and wait for the test.
+          - Choose IP Settings, set DNS to Enter manually and enter {dns_server_ip}. Choose OK.

@@ -1,0 +1,33 @@
+# Hardened variant (standalone, use INSTEAD of docker-compose.yml): Caddy owns :443 and forwards
+# ONLY /dns-query* to AdGuard, so the AdGuard login page is never public. DoT on :853 is unchanged.
+# See infra/README.md "Hardening". On the VM:
+#   sudo docker compose down
+#   sudo DNS_HOST=dns.<domain> docker compose -f docker-compose.harden.yml up -d
+services:
+  adguardhome:
+    image: adguard/adguardhome:latest
+    container_name: pahra-dns-gateway
+    restart: unless-stopped
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "853:853/tcp"       # DoT  <client-id>.dns.<domain>
+      - "853:853/udp"       # DoQ
+      - "127.0.0.1:3000:3000/tcp"  # admin API, localhost only (SSH tunnel)
+    volumes:
+      - ./agd-work:/opt/adguardhome/work
+      - ./agd-conf:/opt/adguardhome/conf
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+  caddy:
+    image: caddy:2
+    container_name: pahra-doh-proxy
+    restart: unless-stopped
+    environment:
+      - DNS_HOST=${DNS_HOST:?set DNS_HOST=dns.<domain>}
+    ports:
+      - "443:443/tcp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - adguardhome

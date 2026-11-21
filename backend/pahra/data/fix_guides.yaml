@@ -1,0 +1,61 @@
+# Fix-the-source guides shown with alerts (SPEC §7).
+# checked: true only for steps verified on a real device; menu names vary by OS version.
+lg_live_plus:
+  match: {acr: true, brand: LG}
+  title: Turn off LG Live Plus (screen recognition)
+  checked: false
+  steps:
+    - Press the Settings button on the remote, then choose All Settings.
+    - Go to General → System → Additional Settings.
+    - Turn Live Plus OFF.
+    - "Also: Support → Privacy & Terms → User Agreements → untick Viewing Information and Interest-Based Advertising."
+    - Re-check after every TV software update. It has been reported to switch back on.
+samsung_viewing_info:
+  match: {acr: true, brand: Samsung}
+  title: Turn off Samsung Viewing Information Services
+  checked: false
+  steps:
+    - Open Settings → Support → Terms & Privacy (or Terms & Policy).
+    - Open Viewing Information Services and choose Disagree.
+    - Open Interest-Based Advertisement and choose Disagree.
+    - Re-check after software updates.
+fire_tv_privacy:
+  match: {brand: Amazon}
+  title: Reduce Fire TV data collection
+  checked: false
+  steps:
+    - Settings → Preferences → Privacy Settings.
+    - Turn OFF Device Usage Data and Collect App Usage Data.
+    - Turn OFF Interest-based Ads.
+generic_acr:
+  match: {acr: true}
+  title: Turn off viewing-data sharing on your TV
+  checked: false
+  steps:
+    - Look in the TV's Settings for "Viewing information", "ACR", "Live Plus", "SmartInteractivity" or "Interest-based ads".
+    - Turn those options off.
+    - Re-check after software updates.
+phishing:
+  match: {type: phishing}
+  title: Check for a phishing link
+  checked: true
+  steps:
+    - Think about links you opened recently in SMS, WhatsApp or email. Don't enter passwords on them.
+    - If you typed a password on a strange page, change that password now.
+    - Run your phone's security scan (Google Play Protect or your antivirus).
+malware:
+  match: {type: malware}
+  title: A device tried to reach a known malicious site
+  checked: true
+  steps:
+    - Pahra blocked it. Check which app was open at the time.
+    - Uninstall apps you don't recognise or didn't install from the official store.
+    - Run a security scan, and update the device's software.
+odd_behaviour:
+  match: {type: odd_behaviour}
+  title: This device may be infected
+  checked: true
+  steps:
+    - Unplug the device or disconnect it from WiFi.
+    - Factory-reset it, then update its firmware before reconnecting.
+    - Change your WiFi password if the device was set up long ago or with a default password.

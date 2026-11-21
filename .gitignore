@@ -1,0 +1,20 @@
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+
+# Local state and secrets
+.env
+.env.local
+*.db
+*.db-wal
+*.db-shm
+.cache/
+
+# Claude Code local settings
+.claude/settings.local.json
