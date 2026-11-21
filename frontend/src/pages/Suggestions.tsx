@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import SuggestionCard from '../components/SuggestionCard'
-import { DeviceIcon, Empty, useToast } from '../components/ui'
+import { DeviceIcon, Empty, FilterChip, Roll, useToast } from '../components/ui'
 
 export default function Suggestions() {
   const qc = useQueryClient()
@@ -39,48 +39,58 @@ export default function Suggestions() {
 
   if (devices.data && devices.data.length === 0) {
     return (
-      <div className="mx-auto max-w-lg pt-10 text-center">
-        <ShieldCheck className="mx-auto h-14 w-14 text-guard" />
-        <h1 className="mt-4 text-2xl font-bold">See who's feeding on your home network</h1>
-        <p className="mt-2 text-muted">Connect your first device in under a minute. No hardware needed.</p>
-        <Link to="/setup" className="btn-primary mt-6">
-          <Plus className="h-4 w-4" /> Connect a device
-        </Link>
+      <div className="relative -mx-4 -mt-6 overflow-hidden border-b border-line px-6 pt-16 pb-20 text-center md:-mx-10 md:-mt-10 md:pt-28 md:pb-28 2xl:-mx-14">
+        <div
+          aria-hidden
+          className="grid-lines pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_at_center,#000_25%,transparent_75%)]"
+        />
+        <div className="relative mx-auto max-w-2xl">
+          <div className="mx-auto grid h-14 w-14 place-items-center rounded-md border border-line bg-panel text-guard">
+            <ShieldCheck className="h-7 w-7" strokeWidth={1.5} />
+          </div>
+          <h1 className="mt-8 font-display text-4xl leading-[1.1] font-normal tracking-[-0.01em] md:text-6xl">
+            See who's feeding on your <span className="text-guard">home network</span>
+          </h1>
+          <p className="mx-auto mt-5 max-w-md text-body">Connect your first device in under a minute. No hardware needed.</p>
+          <Link to="/setup" className="btn-primary mt-8 px-6 py-3 text-base">
+            <Roll><Plus className="h-4 w-4" /> Connect a device</Roll>
+          </Link>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Suggestions</h1>
-          <p className="mt-1 text-sm text-muted">
-            {cards.length} things to review{companies ? ` from ${companies} companies` : ''}. Pahra explains each one; you decide.
+          <h1 className="page-title">Suggestions</h1>
+          <p className="mt-2 text-sm text-muted">
+            {cards.length} things to review{companies ? ` from ${companies} companies` : ''}. QuietNet explains each one; you decide.
           </p>
         </div>
-        <button className="btn-primary px-5 py-3 text-base" disabled={!blockable.length || bulk.isPending} onClick={() => bulk.mutate()}>
-          <Zap className="h-5 w-5" /> Block all ads & trackers{blockable.length ? ` (${blockable.length})` : ''}
+        <button className="btn-primary px-6 py-3 text-base" disabled={!blockable.length || bulk.isPending} onClick={() => bulk.mutate()}>
+          <Roll><Zap className="h-5 w-5" /> Block all ads & trackers{blockable.length ? ` (${blockable.length})` : ''}</Roll>
         </button>
       </div>
 
-      <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
-        <Chip active={!deviceId} onClick={() => setDeviceId(undefined)}>
+      <div className="mt-6 flex gap-2 overflow-x-auto pb-1">
+        <FilterChip active={!deviceId} onClick={() => setDeviceId(undefined)}>
           All devices
-        </Chip>
+        </FilterChip>
         {devices.data?.map((d) => (
-          <Chip key={d.id} active={deviceId === d.id} onClick={() => setDeviceId(d.id)}>
+          <FilterChip key={d.id} active={deviceId === d.id} onClick={() => setDeviceId(d.id)}>
             <DeviceIcon type={d.type} className="h-3.5 w-3.5" /> {d.name}
-          </Chip>
+          </FilterChip>
         ))}
       </div>
 
-      <div className="mt-5 grid gap-4">
-        {sugg.isLoading && <div className="text-muted">Loading…</div>}
+      <div className="mt-5 grid gap-4 xl:grid-cols-2 min-[1800px]:grid-cols-3">
+        {sugg.isLoading && <div className="col-span-full text-muted">Loading…</div>}
         {!sugg.isLoading && cards.length === 0 && (
           <Empty title="All clear">
             Nothing new to review. New domains are checked every 30 seconds.{' '}
-            <button className="text-accent hover:underline" onClick={() => api.pollNow().then(() => setTimeout(refresh, 1500))}>
+            <button className="underline-slide text-guard" onClick={() => api.pollNow().then(() => setTimeout(refresh, 1500))}>
               Check now
             </button>
           </Empty>
@@ -90,16 +100,5 @@ export default function Suggestions() {
         ))}
       </div>
     </div>
-  )
-}
-
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs ${active ? 'border-accent bg-accent/15 text-white' : 'border-line text-muted hover:text-slate-100'}`}
-    >
-      {children}
-    </button>
   )
 }

@@ -1,13 +1,13 @@
 # Android TV (non-Google-TV launcher): Sony BRAVIA, TCL, Xiaomi Mi TV / Mi Box, OnePlus TV, others.
 # Hand-written from memory of these menus. Nothing here has been checked on a real TV yet,
 # so every variant is `verified: false`. Menu names drift between firmware versions.
-# Placeholders: {hostname} Pahra DoT hostname, {dns_server_ip} Pahra DNS IPv4, {gateway_ip} router IP.
+# Placeholders: {hostname} QuietNet DoT hostname, {dns_server_ip} QuietNet DNS IPv4, {gateway_ip} router IP.
 platform: android_tv
 title: Android TV
 automatable: true
 summary: >-
   Android TV has no Private DNS menu, but Android 9 (SDK 28) and newer honour the
-  Private DNS setting when it is written over ADB. Pahra does that for you once ADB is on.
+  Private DNS setting when it is written over ADB. QuietNet does that for you once ADB is on.
 limitations:
   - The Android TV Settings app does not show a Private DNS option, so it can only be set over ADB.
   - Private DNS needs Android 9 (SDK 28) or newer. Older TVs can only use the manual or router options.
@@ -15,14 +15,14 @@ limitations:
 options:
   - id: android_adb_private_dns
     kind: adb_private_dns
-    title: Let Pahra set Private DNS over ADB (automatic)
+    title: Let QuietNet set Private DNS over ADB (automatic)
     automatable: true
     gives_per_device_identity: true
     needs: [hostname]
     notes:
-      - The first time Pahra connects, the TV asks "Allow USB debugging?" (or "Allow network debugging?"). Tick "Always allow from this computer" and choose OK.
+      - The first time QuietNet connects, the TV asks "Allow USB debugging?" (or "Allow network debugging?"). Tick "Always allow from this computer" and choose OK.
       - You can switch USB debugging off again afterwards. The Private DNS setting stays.
-      - "To undo: Pahra can reset Private DNS to automatic (clear_private_dns)."
+      - "To undo: QuietNet can reset Private DNS to automatic (clear_private_dns)."
     variants:
       - label: Android TV 9-11 (generic)
         brands: []
@@ -34,7 +34,7 @@ options:
           - Go back to Device Preferences and open Developer options.
           - Turn on USB debugging. If you also see "Network debugging" or "ADB over network", turn that on too.
           - "Find the TV's IP address: Settings, Network & Internet, then your network."
-          - Tell Pahra you are done. When the TV asks "Allow debugging?", choose Always allow, then OK.
+          - Tell QuietNet you are done. When the TV asks "Allow debugging?", choose Always allow, then OK.
       - label: Sony BRAVIA (Android TV, 2015-2020)
         brands: [sony]
         verified: false
@@ -44,7 +44,7 @@ options:
           - Scroll to Build and press the centre button 7 times, until "You are now a developer!" appears.
           - Go back to Device Preferences and open Developer options.
           - Turn on USB debugging.
-          - Tell Pahra you are done. When the TV asks "Allow USB debugging?", tick Always allow, then OK.
+          - Tell QuietNet you are done. When the TV asks "Allow USB debugging?", tick Always allow, then OK.
       - label: Xiaomi Mi TV / Mi Box (Android TV, PatchWall)
         brands: [xiaomi]
         verified: false
@@ -54,7 +54,7 @@ options:
           - Scroll to Build and press OK 7 times, until "You are now a developer!" appears.
           - Go back to Device Preferences and open Developer options.
           - Turn on USB debugging.
-          - Tell Pahra you are done, then accept "Allow USB debugging?" on the TV (Always allow).
+          - Tell QuietNet you are done, then accept "Allow USB debugging?" on the TV (Always allow).
       - label: TCL Android TV
         brands: [tcl]
         verified: false
@@ -64,7 +64,7 @@ options:
           - Scroll to Build and press OK 7 times, until "You are now a developer!" appears.
           - Go back to Device Preferences and open Developer options.
           - Turn on USB debugging.
-          - Tell Pahra you are done, then accept "Allow USB debugging?" on the TV (Always allow).
+          - Tell QuietNet you are done, then accept "Allow USB debugging?" on the TV (Always allow).
       - label: OnePlus TV (Android TV)
         brands: [oneplus]
         verified: false
@@ -74,7 +74,7 @@ options:
           - Scroll to Build and press OK 7 times, until "You are now a developer!" appears.
           - Go back to Device Preferences and open Developer options.
           - Turn on USB debugging.
-          - Tell Pahra you are done, then accept "Allow USB debugging?" on the TV (Always allow).
+          - Tell QuietNet you are done, then accept "Allow USB debugging?" on the TV (Always allow).
       - label: Android 11+ with Wireless debugging (pairing code)
         brands: []
         min_sdk: 30
@@ -83,8 +83,8 @@ options:
           - Turn on Developer options as above (About, then Build 7 times).
           - In Developer options, turn on Wireless debugging and open it.
           - Choose "Pair device with pairing code". The TV shows an IP:port and a 6-digit code.
-          - Give Pahra that IP:port and code. Pahra pairs (adb_pair).
-          - Pahra then connects to the IP:port shown on the main Wireless debugging screen. This is not the pairing port.
+          - Give QuietNet that IP:port and code. QuietNet pairs (adb_pair).
+          - QuietNet then connects to the IP:port shown on the main Wireless debugging screen. This is not the pairing port.
   - id: android_manual_static_dns
     kind: manual_dns_tv
     title: Type a DNS server into the TV's network settings

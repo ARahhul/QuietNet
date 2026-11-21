@@ -3,7 +3,7 @@
 * Tool declarations come from the MCP server's list_tools (+ a few backend-only tools).
 * Every mutating tool waits for the user's OK in the UI (session.call_tool / set_private_dns).
 * IP and MAC addresses are replaced with handles before anything reaches Gemini.
-* The agent never sees or chooses the Pahra hostname: the backend creates the device and injects it.
+* The agent never sees or chooses the QuietNet hostname: the backend creates the device and injects it.
 """
 
 import copy
@@ -18,8 +18,8 @@ log = logging.getLogger("pahra.agent")
 
 MAX_STEPS = 20
 
-SYSTEM = """You are Pahra's setup assistant. You help a non-technical person in India connect their TV or
-streaming box to Pahra (a DNS filter that blocks ads and trackers), using tools that run on their laptop
+SYSTEM = """You are QuietNet's setup assistant. You help a non-technical person in India connect their TV or
+streaming box to QuietNet (a DNS filter that blocks ads and trackers), using tools that run on their laptop
 on the same WiFi. Be brief and friendly: one or two short sentences per message, no jargon.
 
 Rules:
@@ -28,11 +28,11 @@ Rules:
 - When you need something from the user (e.g. "say done when ADB is on", a pairing code), call ask_user.
 - Mutating tools (adb_connect, adb_pair, set_private_dns, clear_private_dns) show the user an Allow button
   automatically. Don't ask for permission in text as well.
-- set_private_dns: pass only ip (and optional device_name/brand). Pahra fills in the hostname itself.
+- set_private_dns: pass only ip (and optional device_name/brand). QuietNet fills in the hostname itself.
 - After set_private_dns succeeds, call verify_connected. If it returns connected=true, call finish(outcome="connected").
 - For locked platforms (webos, tizen, roku, apple_tv), ADB refused, or verification failure: call
   get_setup_options, then finish(outcome="guide") with the best option. Pass steps only if you changed them;
-  Pahra otherwise uses its hand-checked guide.
+  QuietNet otherwise uses its hand-checked guide.
 - Locked TV (webos/tizen, or ADB refused/failed) and get_setup_options ranks the laptop relay first
   (starts_forwarder=true): call setup_forwarder(ip). It asks the user, then returns forwarder_ip. Tell the user to
   set the TV's DNS server to forwarder_ip using that option's steps, ask_user to reply done, then verify_connected.
@@ -80,13 +80,13 @@ BACKEND_TOOLS = [
     },
     {
         "name": "setup_forwarder",
-        "description": "Run Pahra's DNS relay on this laptop for a locked TV (asks the user first). Creates the TV in "
-                       "Pahra and returns forwarder_ip: the DNS server address the user must type into the TV.",
+        "description": "Run QuietNet's DNS relay on this laptop for a locked TV (asks the user first). Creates the TV in "
+                       "QuietNet and returns forwarder_ip: the DNS server address the user must type into the TV.",
         "parameters": {
             "type": "object",
             "properties": {
                 "ip": {"type": "string", "description": "the TV's handle, e.g. host-3"},
-                "device_name": {"type": "string", "description": "friendly name for the TV in Pahra"},
+                "device_name": {"type": "string", "description": "friendly name for the TV in QuietNet"},
                 "brand": {"type": "string"},
             },
             "required": ["ip"],
@@ -94,7 +94,7 @@ BACKEND_TOOLS = [
     },
     {
         "name": "verify_connected",
-        "description": "After set_private_dns: wait up to 60 s for the TV's first DNS query through Pahra.",
+        "description": "After set_private_dns: wait up to 60 s for the TV's first DNS query through QuietNet.",
         "parameters": {"type": "object", "properties": {}},
     },
     {
@@ -142,7 +142,7 @@ def build_declarations(session: AssistantSession) -> list[dict]:
         if name == "set_private_dns":
             props = schema.setdefault("properties", {})
             props.pop("hostname", None)
-            props["device_name"] = {"type": "string", "description": "friendly name for the TV in Pahra"}
+            props["device_name"] = {"type": "string", "description": "friendly name for the TV in QuietNet"}
             props["brand"] = {"type": "string"}
             schema["required"] = [r for r in schema.get("required", []) if r != "hostname"]
         decls.append({"name": name, "description": (tool.description or "")[:1000], "parameters": schema})

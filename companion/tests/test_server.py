@@ -161,7 +161,7 @@ def test_http_refuses_non_loopback():
 
 
 async def test_stdio_server_starts_and_lists_tools():
-    """Spawn the real server process over stdio, as the Pahra backend does."""
+    """Spawn the real server process over stdio, as the QuietNet backend does."""
     params = StdioServerParameters(command=sys.executable, args=["-m", "pahra_companion"])
     async with Client(params, read_timeout_seconds=30) as c:
         names = {t.name for t in (await c.list_tools()).tools}

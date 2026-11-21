@@ -1,7 +1,7 @@
-"""Single writer that makes AdGuard Home match Pahra's database.
+"""Single writer that makes AdGuard Home match QuietNet's database.
 
 * `set_rules` replaces AdGuard's whole user-rule list, so we always rebuild the
-  complete Pahra section from active decisions and splice it in under one lock.
+  complete QuietNet section from active decisions and splice it in under one lock.
 * Every device is a persistent AdGuard client whose name == its ClientID.
 * With `adguard_lock_access`, only linked ClientIDs / IPs may use the resolver.
 """
@@ -54,7 +54,7 @@ class AdGuardSync:
         return [r["adguard_rule"] for r in rows]
 
     async def sync_rules(self) -> bool:
-        """Push the Pahra section if it differs. Returns True when AdGuard was changed."""
+        """Push the QuietNet section if it differs. Returns True when AdGuard was changed."""
         async with self._lock:
             section = compile_section(self.desired_rules())
             try:
@@ -63,7 +63,7 @@ class AdGuardSync:
                 changed = wanted != current
                 if changed:
                     await self.ag.set_rules(wanted)
-                    log.info("pushed %d Pahra rules to AdGuard", len(section) - 2)
+                    log.info("pushed %d QuietNet rules to AdGuard", len(section) - 2)
             except AdGuardError as e:
                 self.last_error = str(e)
                 self.dirty = True

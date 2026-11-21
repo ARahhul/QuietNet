@@ -1,4 +1,4 @@
-# Pahra cloud DNS gateway (runs on the VM). The admin API/UI is bound to 127.0.0.1:3000
+# QuietNet cloud DNS gateway (runs on the VM). The admin API/UI is bound to 127.0.0.1:3000
 # so it is only reachable through the SSH tunnel from the laptop:
 #   ssh -N -L 3000:127.0.0.1:3000 ubuntu@<VM_IP>
 services:

@@ -13,12 +13,12 @@ limitations:
 options:
   - id: google_tv_adb_private_dns
     kind: adb_private_dns
-    title: Let Pahra set Private DNS over ADB (automatic)
+    title: Let QuietNet set Private DNS over ADB (automatic)
     automatable: true
     gives_per_device_identity: true
     needs: [hostname]
     notes:
-      - The first time Pahra connects, the TV asks "Allow USB debugging?". Tick "Always allow from this computer" and choose OK.
+      - The first time QuietNet connects, the TV asks "Allow USB debugging?". Tick "Always allow from this computer" and choose OK.
       - You can turn developer options off again afterwards. The Private DNS setting stays.
     variants:
       - label: Google TV (generic, incl. Chromecast with Google TV)
@@ -31,7 +31,7 @@ options:
           - Go back to System and open Developer options.
           - Turn on USB debugging.
           - "Find the TV's IP address: Settings, Network & Internet, then your network."
-          - Tell Pahra you are done. When the TV asks "Allow USB debugging?", choose Always allow, then OK.
+          - Tell QuietNet you are done. When the TV asks "Allow USB debugging?", choose Always allow, then OK.
       - label: Sony BRAVIA with Google TV (2021+)
         brands: [sony]
         verified: false
@@ -40,7 +40,7 @@ options:
           - Open System, then About.
           - Scroll to "Android TV OS build" and press the centre button 7 times.
           - Go back to System, open Developer options and turn on USB debugging.
-          - Tell Pahra you are done, then accept "Allow USB debugging?" on the TV (Always allow).
+          - Tell QuietNet you are done, then accept "Allow USB debugging?" on the TV (Always allow).
       - label: Google TV 12+ Wireless debugging (pairing code)
         brands: []
         min_sdk: 31
@@ -49,8 +49,8 @@ options:
           - Turn on Developer options as above (Android TV OS build, 7 times).
           - In System, Developer options, turn on Wireless debugging and open it.
           - Choose "Pair device with pairing code". The TV shows an IP:port and a 6-digit code.
-          - Give Pahra that IP:port and code. Pahra pairs (adb_pair).
-          - Pahra then connects to the IP:port shown on the main Wireless debugging screen. This is not the pairing port.
+          - Give QuietNet that IP:port and code. QuietNet pairs (adb_pair).
+          - QuietNet then connects to the IP:port shown on the main Wireless debugging screen. This is not the pairing port.
   - id: google_tv_manual_static_dns
     kind: manual_dns_tv
     title: Type a DNS server into the TV's network settings

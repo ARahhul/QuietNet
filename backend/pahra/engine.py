@@ -29,7 +29,9 @@ class Engine:
         self.clues = ClueFetcher(self.conn, online=not settings.offline_lists)
         self.explainer = Explainer(settings.gemini_api_key, settings.gemini_model, settings.gemini_batch_size)
         self.pipeline = Pipeline(self.conn, self.lists, self.clues, self.explainer, self.sync)
-        self.poller = Poller(self.conn, self.ag, settings.poll_interval_s, self._on_observed, self._on_tick)
+        self.poller = Poller(
+            self.conn, self.ag, settings.poll_interval_s, self._on_observed, self._on_tick, settings.query_log_hours
+        )
         self.companion = None  # set by assistant.mcp_client when enabled
         self.forwarder: dict = {"running": False, "devices": 0}  # laptop DNS relay state (pahra.forwarder)
         self._tasks: list[asyncio.Task] = []

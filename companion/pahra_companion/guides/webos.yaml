@@ -8,8 +8,8 @@ summary: >-
   It accepts one plain IPv4 DNS server address, typed in by hand.
 limitations:
   - No ADB, no remote shell and no API that can change DNS. webOS Developer Mode only sideloads apps.
-  - No Private DNS, DNS-over-TLS or DNS-over-HTTPS. The TV takes only a plain IPv4 DNS server address, so the Pahra hostname cannot be used directly.
-  - Per-device identity needs either a public IP that Pahra can link (not possible behind CGNAT) or the laptop DNS forwarder.
+  - No Private DNS, DNS-over-TLS or DNS-over-HTTPS. The TV takes only a plain IPv4 DNS server address, so the QuietNet hostname cannot be used directly.
+  - Per-device identity needs either a public IP that QuietNet can link (not possible behind CGNAT) or the laptop DNS forwarder.
 options:
   - id: webos_manual_dns
     kind: manual_dns_tv

@@ -6,9 +6,9 @@ summary: >-
   tvOS has no ADB. Its Settings take a plain DNS server address (IP only, no hostname),
   typed in by hand.
 limitations:
-  - No ADB or remote shell. Pahra cannot change tvOS settings.
+  - No ADB or remote shell. QuietNet cannot change tvOS settings.
   - The Settings app takes only DNS server IP addresses, not a DoT hostname.
-  - tvOS may accept encrypted-DNS configuration profiles installed with Apple Configurator on a Mac. Pahra has not tested this.
+  - tvOS may accept encrypted-DNS configuration profiles installed with Apple Configurator on a Mac. QuietNet has not tested this.
 options:
   - id: apple_tv_manual_dns
     kind: manual_dns_tv

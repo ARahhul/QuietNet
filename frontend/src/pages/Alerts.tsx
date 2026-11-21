@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ShieldAlert, Tv, Wrench } from 'lucide-react'
 import { api } from '../api'
-import { Empty, timeAgo } from '../components/ui'
+import { Empty, Roll, timeAgo } from '../components/ui'
 
 const TITLE: Record<string, string> = {
   malware: 'Threat blocked',
@@ -16,25 +16,25 @@ export default function Alerts() {
   const alerts = useQuery({ queryKey: ['alerts'], queryFn: api.alerts, refetchInterval: 15000 })
   const read = useMutation({ mutationFn: api.readAlert, onSuccess: () => qc.invalidateQueries({ queryKey: ['alerts'] }) })
   return (
-    <div className="mx-auto max-w-3xl">
-      <h1 className="text-2xl font-bold">Alerts</h1>
-      <p className="mt-1 text-sm text-muted">What Pahra noticed, and how to fix it at the source.</p>
-      <div className="mt-5 grid gap-4">
+    <div>
+      <h1 className="page-title">Alerts</h1>
+      <p className="mt-2 text-sm text-muted">What QuietNet noticed, and how to fix it at the source.</p>
+      <div className="mt-6 grid items-start gap-4 xl:grid-cols-2">
         {alerts.data?.length === 0 && <Empty title="No alerts">Nothing risky so far.</Empty>}
         {alerts.data?.map((a) => (
-          <article key={a.id} className={`card p-4 ${a.read ? 'opacity-70' : ''} ${a.type === 'malware' ? 'border-danger/60' : ''}`}>
+          <article key={a.id} className={`card p-5 ${a.read ? 'opacity-70' : ''} ${a.type === 'malware' ? 'border-danger/60' : 'card-hover'}`}>
             <div className="flex items-center gap-2 text-xs text-muted">
               {a.type === 'acr_tracker' ? <Tv className="h-4 w-4 text-warn" /> : <ShieldAlert className="h-4 w-4 text-danger" />}
-              <span className="font-semibold uppercase tracking-wide">{TITLE[a.type] ?? a.type}</span>
+              <span className="font-medium text-white">{TITLE[a.type] ?? a.type}</span>
               <span>· {a.device_name ?? 'device'} · {timeAgo(a.created_at)}</span>
             </div>
-            <p className="mt-2 font-medium">{a.message}</p>
+            <p className="mt-3 font-display text-lg leading-snug">{a.message}</p>
             {a.fix_steps?.steps && a.fix_steps.steps.length > 0 && (
-              <div className="mt-3 rounded-xl bg-panel-2 p-3">
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  <Wrench className="h-4 w-4 text-accent" /> {a.fix_steps.title}
+              <div className="mt-4 rounded-md border border-line bg-ink p-4">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Wrench className="h-4 w-4 text-guard" /> {a.fix_steps.title}
                 </div>
-                <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-slate-300">
+                <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-body">
                   {a.fix_steps.steps.map((s, i) => (
                     <li key={i}>{s}</li>
                   ))}
@@ -45,8 +45,8 @@ export default function Alerts() {
               </div>
             )}
             {!a.read && (
-              <button className="btn-ghost mt-3 px-3 py-1.5 text-xs" onClick={() => read.mutate(a.id)}>
-                Mark as done
+              <button className="btn-ghost mt-4 px-4 py-1.5 text-xs" onClick={() => read.mutate(a.id)}>
+                <Roll>Mark as done</Roll>
               </button>
             )}
           </article>

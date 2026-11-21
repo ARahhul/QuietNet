@@ -1,7 +1,7 @@
 import { Download } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { withToken, type SetupGuide } from '../api'
-import { CopyField } from './ui'
+import { CopyField, Roll } from './ui'
 
 export default function SetupSteps({ deviceId, guide, brand }: { deviceId: string; guide: SetupGuide; brand: string | null }) {
   const v = guide.values
@@ -11,14 +11,14 @@ export default function SetupSteps({ deviceId, guide, brand }: { deviceId: strin
       {guide.method === 'dot' && (
         <div className="grid items-center gap-4 sm:grid-cols-[1fr_auto]">
           <CopyField label="Private DNS provider hostname" value={v.dot_hostname} />
-          <div className="mx-auto rounded-xl bg-white p-2">
+          <div className="mx-auto rounded-md bg-white p-2">
             <QRCodeSVG value={v.dot_hostname} size={96} />
           </div>
         </div>
       )}
       {guide.method === 'doh' && apple && (
         <a className="btn-primary w-fit" href={withToken(`/devices/${deviceId}/profile.mobileconfig`)}>
-          <Download className="h-4 w-4" /> Download profile
+          <Roll><Download className="h-4 w-4" /> Download profile</Roll>
         </a>
       )}
       {guide.method === 'doh' && <CopyField label="DNS-over-HTTPS URL" value={v.doh_url} />}
@@ -30,7 +30,7 @@ export default function SetupSteps({ deviceId, guide, brand }: { deviceId: strin
       <ol className="grid gap-2 text-sm">
         {guide.steps.map((s, i) => (
           <li key={i} className="flex gap-3">
-            <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-panel-2 text-xs text-muted">{i + 1}</span>
+            <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-line font-display text-xs text-white">{i + 1}</span>
             <span className={s.startsWith('adb ') ? 'font-mono text-xs' : ''}>{s}</span>
           </li>
         ))}

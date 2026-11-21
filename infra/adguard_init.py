@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Configure a fresh AdGuard Home for Pahra through the admin API (stdlib only).
+"""Configure a fresh AdGuard Home for QuietNet through the admin API (stdlib only).
 
 Run from the laptop with the SSH tunnel up (or on the VM itself):
     python adguard_init.py --dns-host dns.pahra.app --user admin --password '<strong>'
@@ -8,7 +8,7 @@ Steps (each is idempotent):
   1. finish the first-run install wizard (admin on :3000, DNS on :53)
   2. enable encryption: DoH :443 and DoT :853 with the Let's Encrypt wildcard cert
   3. upstreams (Cloudflare + Quad9 over TLS), demo TTLs (blocked 10 s, max cache 30 s)
-  4. query log kept 24 h (Pahra polls it every 30 s)
+  4. query log kept 24 h (QuietNet polls it every 30 s)
   5. global filter lists = malware/phishing only. Ad/tracker blocking is per-device via $client rules,
      otherwise ads would already be gone before "Block all ads" on stage.
   6. close the resolver: an empty access list means "answer everyone" (an open resolver that gets

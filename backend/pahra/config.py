@@ -33,6 +33,7 @@ class Settings(BaseSettings):
 
     poll_interval_s: int = 30
     event_retention_days: int = 7
+    query_log_hours: int = 24  # individual lookups kept for the live view and report charts
 
     # Single-user hackathon auth
     api_token: str = "dev-token"

@@ -1,4 +1,4 @@
-# Pahra infra: set up the cloud DNS server
+# QuietNet infra: set up the cloud DNS server
 
 The VM runs **only AdGuard Home**. Everything else runs on the laptop and reaches AdGuard through an SSH tunnel:
 
@@ -130,7 +130,7 @@ Each step is safe to re-run. It does the following:
 * sets the upstream resolvers and the demo cache times (blocked answers 10 s, allowed answers at most 30 s);
 * keeps 24 h of query log;
 * limits the global lists to malware and phishing only;
-* **closes the resolver to strangers** until Pahra adds your devices.
+* **closes the resolver to strangers** until QuietNet adds your devices.
 
 ## 6. Connect the backend (5 min)
 
@@ -178,7 +178,7 @@ Each step is safe to re-run. It does the following:
 | `docker compose up` says port 53 is in use | `systemd-resolved` still holds it. Re-run `vm-setup.sh`. Check with `sudo ss -lunp 'sport = :53'` |
 | `verify.py` DoT or DoH time out | The cloud firewall is still closed. On Oracle, check the subnet Security List **and** that `vm-setup.sh` printed no iptables errors. On GCP, check the VM has the `pahra-dns` network tag |
 | DoT says "certificate verify failed" | The `*.dns` record or the wildcard certificate is missing. Run `sudo certbot certificates` on the VM; it must list `*.dns.example.com` |
-| DoT and DoH return REFUSED | That client id isn't in Pahra yet. Add the device in the dashboard first: the backend adds it to AdGuard's allowed list |
+| DoT and DoH return REFUSED | That client id isn't in QuietNet yet. Add the device in the dashboard first: the backend adds it to AdGuard's allowed list |
 | Port 53 answers (NOERROR) instead of REFUSED | The backend isn't running, or `ADGUARD_LOCK_ACCESS=false`. Start the backend and check **Settings → Rule sync** |
 | Tunnel window loops on "Permission denied (publickey)" | Wrong user or key. Oracle uses `ubuntu`; GCP uses your Google username (`-User`) |
 | Settings shows the DNS gateway red | The tunnel is down. Look at the tunnel window, then check `curl.exe -u admin:<pw> http://127.0.0.1:3000/control/status` |

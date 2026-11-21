@@ -1,7 +1,7 @@
 [project]
 name = "pahra"
 version = "0.1.0"
-description = "Pahra AI engine: AdGuard Home poller, domain classifier, per-device rule pusher and REST API"
+description = "QuietNet AI engine: AdGuard Home poller, domain classifier, per-device rule pusher and REST API"
 requires-python = ">=3.11,<4.0"
 dependencies = [
     "fastapi>=0.115",

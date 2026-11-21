@@ -1,10 +1,12 @@
-# Pahra
+<p align="center"><img src="frontend/public/quietnet-logo.png" alt="QuietNet: the silent home sentry" width="260" /></p>
 
-A cloud DNS gateway for the home. Every device resolves through an AdGuard Home server on a VM. Pahra's engine:
+# QuietNet
+
+A cloud DNS gateway for the home. Every device resolves through an AdGuard Home server on a VM. QuietNet's engine:
 
 * explains which companies each device talks to;
 * lets you block them per device;
-* finds your TV on the WiFi and points its DNS at Pahra, or tells you exactly how to do that by hand.
+* finds your TV on the WiFi and points its DNS at QuietNet, or tells you exactly how to do that by hand.
 
 ```
  phone / laptop ──DoT/DoH──►┐
@@ -98,12 +100,12 @@ For the real VM, follow [infra/README.md](infra/README.md), run `infra\tunnel.ps
 4. **Android TV, Google TV or Fire TV:**
    1. Walks you through turning on ADB, or pairs over Wireless debugging.
    2. Asks before each change.
-   3. Creates the Pahra device and sets Private DNS to `<client-id>.dns.<domain>`.
+   3. Creates the QuietNet device and sets Private DNS to `<client-id>.dns.<domain>`.
    4. Waits for the TV's first query in AdGuard and shows **Connected**.
 5. **Locked TVs behind CGNAT** (LG webOS, Samsung Tizen), or when ADB is refused:
    1. It offers the **laptop DNS relay** and asks first.
    2. The companion listens on the laptop's WiFi IP:53 and forwards each TV's queries over DoH under that TV's own ClientID.
-   3. You type the laptop's IP into the TV's DNS. Pahra waits for the first query and shows **Connected**.
+   3. You type the laptop's IP into the TV's DNS. QuietNet waits for the first query and shows **Connected**.
    4. The relay is restored whenever the backend starts, and stops for a TV when you delete that TV.
    5. The laptop has to stay on.
 6. **Everything else** (Roku, Apple TV, the relay declined, or verification failed): it shows a ranked, step-by-step guide that takes CGNAT into account. That means manual DNS on the TV, router DNS, or a hotspot for the demo. The values are filled in, and it says plainly what isn't possible.
@@ -119,7 +121,7 @@ For the real VM, follow [infra/README.md](infra/README.md), run `infra\tunnel.ps
 **What it sends to Gemini.** Device names, vendors and models. Before anything reaches the model:
 
 * IP and MAC addresses are replaced with handles (`host-3`, `mac-1`).
-* The TV's Pahra hostname and DoH URL are scrubbed.
+* The TV's QuietNet hostname and DoH URL are scrubbed.
 
 DNS logs are never sent to the assistant.
 
@@ -147,4 +149,20 @@ cd frontend;  npm run build
 * With the laptop asleep, rules already pushed keep working. New cards, quarantine and auto-mode pause until it wakes.
 * Neither the companion's guide steps nor its fingerprint fixtures have been checked on real TVs. See "Not verified on real hardware" in [companion/README.md](companion/README.md).
 * Router DNS behind CGNAT cannot identify the home. Use per-device DoT/DoH, the laptop relay for locked TVs, or a hotspot for the demo.
-* **TVs on the laptop relay lose DNS while the laptop sleeps or Pahra is stopped.** Phones and laptops on DoT/DoH don't depend on the laptop.
+* **TVs on the laptop relay lose DNS while the laptop sleeps or QuietNet is stopped.** Phones and laptops on DoT/DoH don't depend on the laptop.
+
+## Credits
+
+QuietNet is the dashboard and the engine. The DNS that every device talks to runs on open-source software and public services:
+
+| Project | What it does in QuietNet | License |
+|---|---|---|
+| [AdGuard Home](https://github.com/AdguardTeam/AdGuardHome) | The DNS server on the cloud VM (`adguard/adguardhome` in Docker). It answers every lookup over DoT and DoH, applies the per-device `$client` rules, and keeps the query log the engine reads | GPL-3.0 |
+| [Cloudflare 1.1.1.1](https://1.1.1.1) and [Quad9](https://www.quad9.net) | Upstream resolvers, reached over TLS, for lookups that are allowed | Public services |
+| [Let's Encrypt](https://letsencrypt.org) and [Certbot](https://github.com/certbot/certbot) | The wildcard certificate behind each device's own DoT/DoH address, issued with the Cloudflare DNS plugin | Certbot: Apache-2.0 |
+| [Caddy](https://github.com/caddyserver/caddy) | Optional HTTPS front for DNS-over-HTTPS in `infra/docker-compose.harden.yml` | Apache-2.0 |
+| [HaGeZi DNS blocklists](https://github.com/hagezi/dns-blocklists) | Tracker and smart-TV lists used to recognise domains | GPL-3.0 |
+| [DuckDuckGo Tracker Radar](https://github.com/duckduckgo/tracker-radar) | Which company owns a tracking domain and what it collects | CC BY-NC-SA 4.0 |
+| [Inter and Inter Tight](https://rsms.me/inter/) | Dashboard typefaces by Rasmus Andersson | SIL OFL 1.1 |
+
+The dashboard's Settings page carries the same list.

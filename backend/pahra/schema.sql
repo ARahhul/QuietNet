@@ -1,4 +1,4 @@
--- Pahra SQLite schema (SPEC §5 / architecture §6)
+-- QuietNet SQLite schema (SPEC §5 / architecture §6)
 
 CREATE TABLE IF NOT EXISTS users (
     id          TEXT PRIMARY KEY,
@@ -54,6 +54,24 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS idx_events_last_ts ON events(last_ts);
 CREATE INDEX IF NOT EXISTS idx_events_domain ON events(domain);
+
+-- Individual lookups for the live view and the report charts (pruned after query_log_hours)
+CREATE TABLE IF NOT EXISTS queries (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id   TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+    t           REAL NOT NULL,                   -- unix seconds (UTC)
+    qname       TEXT NOT NULL,                   -- name as asked
+    domain      TEXT NOT NULL,                   -- normalised target (events.domain)
+    qtype       TEXT,                            -- A | AAAA | HTTPS | ...
+    client_ip   TEXT,                            -- source address AdGuard saw
+    proto       TEXT,                            -- dot | doh | dns | ...
+    status      TEXT NOT NULL,                   -- blocked | cached | allowed
+    blocked_by  TEXT,                            -- rule (your QuietNet rules) | list (AdGuard filter lists)
+    upstream    TEXT,
+    elapsed_ms  REAL
+);
+CREATE INDEX IF NOT EXISTS idx_queries_t ON queries(t);
+CREATE INDEX IF NOT EXISTS idx_queries_device_t ON queries(device_id, t);
 
 CREATE TABLE IF NOT EXISTS decisions (
     id            TEXT PRIMARY KEY,

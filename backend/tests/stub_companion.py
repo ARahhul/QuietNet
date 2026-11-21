@@ -68,7 +68,7 @@ def make_stub(on_private_dns=None, devices=None, relay=True, on_forwarder=None):
             opts.append({"id": "adb_private_dns", "title": "Automatic (ADB)", "automatable": True, "available": True,
                          "recommended": True, "verified": False, "steps": ["Settings → My Fire TV → About → click 7×"]})
         if relay and cgnat == "cgnat" and platform in ("webos", "tizen", "fire_tv", "android_tv", "google_tv"):
-            opts.append({"id": f"{platform}_manual_dns:laptop_forwarder", "title": "Point the TV's DNS at this laptop (Pahra relay)",
+            opts.append({"id": f"{platform}_manual_dns:laptop_forwarder", "title": "Point the TV's DNS at this laptop (QuietNet relay)",
                          "kind": "manual_dns", "dns_target": "laptop_forwarder", "starts_forwarder": True, "needs_laptop_on": True,
                          "automatable": False, "available": True, "recommended": True, "verified": False,
                          "why": "Behind CGNAT the relay keeps this TV's own identity.",
@@ -114,7 +114,7 @@ def make_stub(on_private_dns=None, devices=None, relay=True, on_forwarder=None):
                 on_forwarder(mappings)
             return {"ok": True, "running": True, "listen_ip": LAPTOP_IP, "port": port, "mappings": mappings,
                     "upstream_template": f"https://{dns_hostname}/dns-query/<client_id>",
-                    "hint": "Windows Firewall must allow DNS in: New-NetFirewallRule -DisplayName 'Pahra DNS relay' ..."}
+                    "hint": "Windows Firewall must allow DNS in: New-NetFirewallRule -DisplayName 'QuietNet DNS relay' ..."}
 
         @srv.tool(annotations=RW_SAFE)
         async def stop_dns_forwarder() -> dict:

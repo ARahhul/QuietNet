@@ -48,7 +48,7 @@ def setup_guide(s: Settings, device: dict, forwarder_ip: str | None = None) -> d
     cid = device["client_id"]
     host = dot_hostname(s, cid)
     url = doh_url(s, cid)
-    vm = s.vm_ip or "<your Pahra server IP>"
+    vm = s.vm_ip or "<your QuietNet server IP>"
     method = device["setup_method"]
     values = {"dot_hostname": host, "doh_url": url, "server_ip": vm}
     if method == "dot":
@@ -62,7 +62,7 @@ def setup_guide(s: Settings, device: dict, forwarder_ip: str | None = None) -> d
         steps = [
             "Tap 'Download profile' below (open this page in Safari).",
             "Open Settings → Profile Downloaded → Install, and enter your passcode.",
-            "iPhone: Settings → General → VPN & Device Management shows 'Pahra DNS'.",
+            "iPhone: Settings → General → VPN & Device Management shows 'QuietNet DNS'.",
             "Open any website. This page turns green within 30 seconds.",
         ]
     elif method == "doh":
@@ -75,7 +75,7 @@ def setup_guide(s: Settings, device: dict, forwarder_ip: str | None = None) -> d
         ]
     elif method == "adb":
         steps = [
-            "Easiest: use 'Find & connect my TV' and Pahra's assistant does this for you.",
+            "Easiest: use 'Find & connect my TV' and QuietNet's assistant does this for you.",
             "Manual: enable Developer options and Network/ADB debugging on the TV.",
             "On a computer on the same WiFi run:",
             "adb connect <tv-ip>:5555",
@@ -90,9 +90,9 @@ def setup_guide(s: Settings, device: dict, forwarder_ip: str | None = None) -> d
         relay = forwarder_ip or "this laptop's WiFi IP"
         values["forwarder_ip"] = relay
         steps = [
-            "Pahra relays this TV's DNS through this laptop, so it keeps its own identity behind CGNAT.",
+            "QuietNet relays this TV's DNS through this laptop, so it keeps its own identity behind CGNAT.",
             f"On the TV, open the network settings, switch DNS to manual and set it to {relay}.",
-            "Keep the laptop on and Pahra running while the TV is in use. If the laptop sleeps, the TV can't look up names.",
+            "Keep the laptop on and QuietNet running while the TV is in use. If the laptop sleeps, the TV can't look up names.",
             "To stop: set the TV's DNS back to automatic, then delete the TV here.",
         ]
     else:  # router / ipv4_demo / ipv6
@@ -100,7 +100,7 @@ def setup_guide(s: Settings, device: dict, forwarder_ip: str | None = None) -> d
             "Open your router's admin page (often http://192.168.1.1 or http://192.168.29.1 on JioFiber).",
             f"Find DNS settings and set Primary DNS to {vm}. Leave Secondary EMPTY (or the same IP).",
             "Save and restart the router. Every device on your WiFi, including smart TVs, is now covered.",
-            "Pahra links your home IP automatically when you open this page from your home WiFi.",
+            "QuietNet links your home IP automatically when you open this page from your home WiFi.",
             "If your ISP uses CGNAT (JioFiber, Airtel, ACT often do), IPv4 linking is unsafe. Use IPv6 linking or a phone hotspot for the demo.",
         ]
     return {"method": method, "values": values, "steps": steps}
@@ -108,7 +108,7 @@ def setup_guide(s: Settings, device: dict, forwarder_ip: str | None = None) -> d
 
 def mobileconfig(s: Settings, device: dict) -> str:
     url = escape(doh_url(s, device["client_id"]))
-    name = escape(f"Pahra DNS ({device['name']})")
+    name = escape(f"QuietNet DNS ({device['name']})")
     pid, cid = str(uuid.uuid5(uuid.NAMESPACE_URL, url)).upper(), str(uuid.uuid4()).upper()
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -129,7 +129,7 @@ def mobileconfig(s: Settings, device: dict) -> str:
       <key>PayloadVersion</key><integer>1</integer>
     </dict>
   </array>
-  <key>PayloadDescription</key><string>Routes DNS through Pahra to block ads and trackers.</string>
+  <key>PayloadDescription</key><string>Routes DNS through QuietNet to block ads and trackers.</string>
   <key>PayloadDisplayName</key><string>{name}</string>
   <key>PayloadIdentifier</key><string>app.pahra.profile.{cid}</string>
   <key>PayloadRemovalDisallowed</key><false/>

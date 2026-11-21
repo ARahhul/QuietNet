@@ -49,7 +49,7 @@ def apply_policy(conn: sqlite3.Connection, device_id: str, domain: str, qnames: 
             changed = True
         create_alert(
             conn, user_id=dev["user_id"], device=dev, type_="malware", domain=domain,
-            message=f"Your {dev['name']} tried to reach a known malicious site ({domain}). Pahra blocked it.",
+            message=f"Your {dev['name']} tried to reach a known malicious site ({domain}). QuietNet blocked it.",
         )
         return changed
 

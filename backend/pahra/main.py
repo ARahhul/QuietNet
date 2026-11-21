@@ -38,7 +38,7 @@ def create_app(
                 await stop(eng)
             await eng.stop()
 
-    app = FastAPI(title="Pahra", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="QuietNet", version="0.1.0", lifespan=lifespan)
     app.state.extra_lifespan = []
     app.add_middleware(
         CORSMiddleware,

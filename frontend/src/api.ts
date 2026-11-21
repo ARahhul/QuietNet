@@ -87,6 +87,104 @@ export interface Decision {
   undone_at: string | null
 }
 
+/** A block rule in force. `device` is null for a household-wide block; `action: 'quarantine'` is an automatic hold. */
+export interface BlockedDomain {
+  id: string
+  domain: string
+  action: 'block' | 'quarantine'
+  decided_by: 'user' | 'auto'
+  created_at: string
+  device: { id: string; name: string; type: DeviceType } | null
+  /** Devices a per-device allow exempts from a household block. */
+  allowed_on: { id: string; name: string }[]
+  category: Category
+  owner: string | null
+  what_it_does: string | null
+  confidence: 'high' | 'medium' | 'low' | null
+  break_risk: 'low' | 'medium' | 'high' | null
+  break_note: string | null
+  must_allow: boolean
+  blocked_count: number
+  last_seen: string | null
+}
+
+export interface LiveQuery {
+  id: number
+  time: string
+  device: { id: string; name: string; type: DeviceType }
+  client_ip: string | null
+  proto: string | null
+  qname: string
+  domain: string
+  qtype: string | null
+  /** cached answers are allowed too; they just never left the server */
+  status: 'blocked' | 'allowed' | 'cached'
+  /** rule: one of your QuietNet rules; list: a filter list on the DNS server */
+  blocked_by: 'rule' | 'list' | null
+  upstream: string | null
+  elapsed_ms: number | null
+  category: Category
+  owner: string | null
+}
+
+export interface NetworkClient {
+  id: string
+  name: string
+  type: DeviceType
+  brand: string | null
+  setup_method: string
+  /** the device's address on the home network, when QuietNet knows it (laptop relay) */
+  lan_ip: string | null
+  linked_ip: string | null
+  /** source addresses the DNS server saw in the window, busiest first */
+  ips: { ip: string | null; queries: number; blocked: number; last: string }[]
+  queries: number
+  blocked: number
+  last: string | null
+  active: boolean
+}
+
+export interface Ranked {
+  domain: string
+  n: number
+  owner: string | null
+  category: Category
+}
+
+export interface Analytics {
+  hours: number
+  bucket_s: number
+  start: string
+  end: string
+  totals: {
+    queries: number
+    blocked: number
+    blocked_by_rules: number
+    cached: number
+    domains: number
+    active_devices: number
+    avg_reply_ms: number | null
+    block_rules: number
+  }
+  timeline: { allowed: number[]; blocked: number[] }
+  /** every device in creation order (stable colours), each with one count per bucket */
+  devices: { id: string; name: string; type: DeviceType; queries: number; blocked: number; series: number[] }[]
+  query_types: { name: string; n: number }[]
+  answered_by: { name: string; n: number }[]
+  top_allowed: Ranked[]
+  top_blocked: Ranked[]
+  top_companies: { owner: string; n: number; blocked: number; domains: number }[]
+}
+
+export type LiveFilter = { device_id?: string; ip?: string; status?: 'all' | 'blocked' | 'allowed'; q?: string; limit?: number }
+
+const qs = (p: Record<string, string | number | undefined | null>) => {
+  const s = new URLSearchParams()
+  for (const [k, v] of Object.entries(p)) if (v !== undefined && v !== null && v !== '') s.set(k, String(v))
+  const out = s.toString()
+  return out ? `?${out}` : ''
+}
+
 export interface Alert {
   id: string
   type: string
@@ -164,9 +262,15 @@ export const api = {
   undo: (id: string) => req<{ decision: Decision; synced: boolean }>('POST', `/decisions/${id}/undo`),
   undoBulk: (ids: string[]) => req<{ count: number }>('POST', '/decisions/undo-bulk', { ids }),
   decisions: () => req<Decision[]>('GET', '/decisions'),
+  blocked: () => req<BlockedDomain[]>('GET', '/blocked'),
   alerts: () => req<Alert[]>('GET', '/alerts'),
   readAlert: (id: string) => req<{ ok: boolean }>('POST', `/alerts/${id}/read`),
   report: () => req<Report>('GET', '/report/weekly'),
+  analytics: (hours: number, deviceId?: string) =>
+    req<Analytics>('GET', `/report/analytics${qs({ hours, device_id: deviceId })}`),
+  liveQueries: (f: LiveFilter) =>
+    req<{ queries: LiveQuery[]; last_poll: string | null; poll_error: string | null }>('GET', `/live/queries${qs(f)}`),
+  liveClients: (minutes = 60) => req<NetworkClient[]>('GET', `/live/clients${qs({ minutes })}`),
   settings: () => req<Settings>('GET', '/settings'),
   patchSettings: (b: Partial<Settings>) => req<Settings>('PATCH', '/settings', b),
   pollNow: () => req<{ ok: boolean }>('POST', '/poll-now'),

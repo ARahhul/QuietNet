@@ -33,18 +33,18 @@ STEP_TEXT = {
     "get_setup_options": "Finding the best way to connect it",
     "adb_connect": "Connecting to the TV over ADB",
     "adb_pair": "Pairing with the TV",
-    "set_private_dns": "Pointing the TV's DNS at Pahra",
+    "set_private_dns": "Pointing the TV's DNS at QuietNet",
     "clear_private_dns": "Resetting the TV's Private DNS",
 }
 CONFIRM_TEXT = {
     "adb_connect": "Connect to {label} over ADB (developer mode)? The TV will ask \"Allow debugging?\". Press Allow on the TV.",
     "adb_pair": "Pair this computer with {label} using the code shown on the TV?",
-    "set_private_dns": "Point {label}'s DNS at Pahra ({hostname})? Its ad and tracker traffic will start showing up here. You can undo this any time.",
+    "set_private_dns": "Point {label}'s DNS at QuietNet ({hostname})? Its ad and tracker traffic will start showing up here. You can undo this any time.",
     "clear_private_dns": "Reset {label}'s Private DNS back to Automatic?",
-    "forwarder": "Run Pahra's DNS relay on this laptop for {label}? The TV will send its DNS to this laptop, which passes it to "
-                 "Pahra under the TV's own name. Keep the laptop on (and Pahra running) while the TV is in use.",
+    "forwarder": "Run QuietNet's DNS relay on this laptop for {label}? The TV will send its DNS to this laptop, which passes it to "
+                 "QuietNet under the TV's own name. Keep the laptop on (and QuietNet running) while the TV is in use.",
 }
-FORWARDER_STEP = "Starting Pahra's DNS relay on this laptop"
+FORWARDER_STEP = "Starting QuietNet's DNS relay on this laptop"
 
 
 def is_forwarder_option(o: dict) -> bool:
@@ -161,7 +161,7 @@ class AssistantSession:
     async def call_tool(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
         """Run a companion tool with a progress step, asking the user first for anything mutating."""
         if self.companion.is_mutating(name):
-            prompt = CONFIRM_TEXT.get(name, f"Allow Pahra to run {name} on your device?").format(
+            prompt = CONFIRM_TEXT.get(name, f"Allow QuietNet to run {name} on your device?").format(
                 label=self.label(args.get("ip")), hostname=args.get("hostname", "")
             )
             if not await self.confirm(prompt):
@@ -185,7 +185,7 @@ class AssistantSession:
         return res
 
     def ensure_device(self, name: str | None, brand: str | None, setup_method: str = "adb", lan_ip: str | None = None) -> dict:
-        """Create the Pahra device record (type tv) the first time we need its hostname."""
+        """Create the QuietNet device record (type tv) the first time we need its hostname."""
         if self.device:
             return self.device
         e = self.engine
@@ -200,8 +200,8 @@ class AssistantSession:
         )
         self.device = row_to_dict(e.conn.execute("SELECT * FROM devices WHERE id = ?", (did,)).fetchone())
         # The hostname / DoH URL identify this device to the DNS server: keep them away from the LLM.
-        self.redactor.add_secret(self.hostname(), "<this TV's Pahra address>")
-        self.redactor.add_secret(doh_url(e.settings, cid), "<this TV's Pahra DoH address>")
+        self.redactor.add_secret(self.hostname(), "<this TV's QuietNet address>")
+        self.redactor.add_secret(doh_url(e.settings, cid), "<this TV's QuietNet DoH address>")
         return self.device  # type: ignore[return-value]
 
     def hostname(self) -> str:
@@ -261,7 +261,7 @@ class AssistantSession:
         if not self.device:
             return False
         cid = self.device["client_id"]
-        await self.emit({"type": "step", "text": "Waiting for the TV's first query through Pahra (up to 60 s)", "status": "running"})
+        await self.emit({"type": "step", "text": "Waiting for the TV's first query through QuietNet (up to 60 s)", "status": "running"})
         loop = asyncio.get_running_loop()
         end = loop.time() + timeout_s
         while loop.time() < end:
@@ -270,7 +270,7 @@ class AssistantSession:
                 if any((e.get("client_id") or "") == cid for e in data.get("data") or []):
                     self.engine.conn.execute("UPDATE devices SET last_seen = ? WHERE id = ?", (now_iso(), self.device["id"]))
                     self.engine.poller.poke()
-                    await self.emit({"type": "step", "text": "The TV is talking through Pahra", "status": "ok"})
+                    await self.emit({"type": "step", "text": "The TV is talking through QuietNet", "status": "ok"})
                     return True
             except AdGuardError:
                 pass
@@ -287,7 +287,7 @@ class AssistantSession:
         host = self.hostname() if self.device else f"<your-device>.{s_.dns_hostname}"
         return (
             s.replace("{hostname}", host)
-            .replace("{dns_server_ip}", s_.vm_ip or "<Pahra server IP>")
+            .replace("{dns_server_ip}", s_.vm_ip or "<QuietNet server IP>")
             .replace("{gateway_ip}", gw)
             .replace("{forwarder_ip}", laptop)
             .replace("{doh_url}", f"https://{s_.dns_hostname}/dns-query/{self.device['client_id'] if self.device else '<id>'}")
@@ -333,7 +333,7 @@ class AssistantSession:
         if use_forwarder and is_forwarder_option(top) and self.forwarder_ip:
             values["DNS server for the TV (this laptop)"] = self.forwarder_ip
         elif self.engine.settings.vm_ip:
-            values["Pahra DNS server"] = self.engine.settings.vm_ip
+            values["QuietNet DNS server"] = self.engine.settings.vm_ip
         return {"title": top.get("title") or "Set up DNS manually", "steps": steps, "values": values, "ai_suggested": False}
 
     async def finish(self, outcome: str, text: str, guide: dict | None = None) -> None:

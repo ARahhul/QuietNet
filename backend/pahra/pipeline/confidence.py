@@ -22,10 +22,10 @@ def apply_confidence(verdict: dict, fast, beacon: bool, must_allow: bool) -> dic
     if must_allow:
         v.update(category="needed", confidence="high", break_risk="high")
         if not v.get("what_it_does") or v["what_it_does"] == UNCONFIRMED_TEXT:
-            # "needed" is confirmed by Pahra's own must-allow list, so don't call it unconfirmed
-            v["what_it_does"] = "Needed for the device or a core app (updates, time, streaming) to work. Pahra never blocks it automatically."
+            # "needed" is confirmed by QuietNet's own must-allow list, so don't call it unconfirmed
+            v["what_it_does"] = "Needed for the device or a core app (updates, time, streaming) to work. QuietNet never blocks it automatically."
         v.setdefault("break_note", "Needed for the device or a core app to work.")
-        v["sources"] = [*sources, "Pahra must-allow list"]
+        v["sources"] = [*sources, "QuietNet must-allow list"]
         return v
 
     conf = compute_confidence(

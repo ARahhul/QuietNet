@@ -1,7 +1,7 @@
 """CGNAT check: the router's WAN IP (UPnP IGD) against the public IP the internet sees.
 
 Why it matters: when the home is behind carrier-grade NAT (common on JioFiber,
-Airtel and ACT IPv4), the Pahra VM sees a public IPv4 address shared with other
+Airtel and ACT IPv4), the QuietNet VM sees a public IPv4 address shared with other
 customers. Pointing the router's plain DNS at the VM then gives no per-home
 identity, so router DNS is only recommended when the verdict is "not_cgnat".
 """

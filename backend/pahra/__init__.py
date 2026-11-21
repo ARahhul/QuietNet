@@ -1,1 +1,1 @@
-"""Pahra AI engine."""
+"""QuietNet AI engine."""

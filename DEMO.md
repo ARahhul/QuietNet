@@ -1,4 +1,4 @@
-# Pahra demo runbook
+# QuietNet demo runbook
 
 Target, from the PRD:
 * Connect a phone live in **under 60 seconds**.
@@ -48,13 +48,13 @@ The whole run takes under 3 minutes.
 
 | Time | Do | Say |
 |---|---|---|
-| 0:00 | Open the dashboard | "Every device at home quietly talks to dozens of companies. Pahra shows you who, in plain words." |
+| 0:00 | Open the dashboard | "Every device at home quietly talks to dozens of companies. QuietNet shows you who, in plain words." |
 | 0:15 | **Setup → Android phone**: name it, scan the QR on the phone, paste it into Private DNS | "One setting, no app." The page turns green within about 30 s |
 | 0:50 | **Suggestions** | Point at the count ("15 things from 10 companies") and at the **"Watches your screen"** card for the TV, with its confidence and sources |
 | 1:20 | **Block all ads & trackers**, then Airplane Mode for 2 s, then refresh the ad-heavy site | "Gone. Per device, undoable. Netflix and updates are never touched." |
 | 1:50 | **Alerts**: the LG Live Plus card | "We don't just block, we tell you how to switch it off at the source." |
 | 2:10 | *(optional)* **Connect my TV** on the Fire TV, then **Allow** twice | The live scan, then **Connected**. Or show the LG relay that's already set up |
-| 2:40 | **Close the laptop**, refresh on the phone | "The phone talks to Pahra's DNS server directly. Still blocked." |
+| 2:40 | **Close the laptop**, refresh on the phone | "The phone talks to QuietNet's DNS server directly. Still blocked." |
 | 2:55 | **Report** | "This week: N lookups, X % blocked." |
 
 ## When something goes wrong
