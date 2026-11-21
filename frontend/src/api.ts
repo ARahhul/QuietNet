@@ -1,4 +1,6 @@
 export const API_TOKEN: string = import.meta.env.VITE_API_TOKEN ?? 'dev-token'
+// Empty in dev (Vite proxies /api). A hosted build (Firebase) sets VITE_API_BASE to the public backend URL.
+const API_BASE: string = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
 
 export class ApiError extends Error {
   status: number
@@ -11,7 +13,7 @@ export class ApiError extends Error {
 }
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const r = await fetch(`/api${path}`, {
+  const r = await fetch(`${API_BASE}/api${path}`, {
     method,
     headers: { Authorization: `Bearer ${API_TOKEN}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -22,7 +24,7 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   return data as T
 }
 
-export const withToken = (path: string) => `/api${path}${path.includes('?') ? '&' : '?'}token=${encodeURIComponent(API_TOKEN)}`
+export const withToken = (path: string) => `${API_BASE}/api${path}${path.includes('?') ? '&' : '?'}token=${encodeURIComponent(API_TOKEN)}`
 
 // ---------- types ----------
 export type Category = 'ads' | 'tracking' | 'telemetry' | 'needed' | 'malware' | 'unknown'
