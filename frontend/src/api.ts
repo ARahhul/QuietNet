@@ -56,6 +56,33 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 export const withToken = (path: string) => `${apiUrl(path)}${path.includes('?') ? '&' : '?'}token=${encodeURIComponent(getToken())}`
 
 // ---------- types ----------
+/** What the AI read on a pasted screenshot, with QuietNet's values already filled in */
+export interface ScreenAnswer {
+  screen: string
+  /** A direct answer to their question */
+  reply: string
+  on_track: boolean
+  steps: string[]
+  fill: { field: string; value: string }[]
+  warning: string
+  next: string
+  done: boolean
+}
+/** An earlier answer, sent back so the AI carries on from it */
+export interface ScreenTurn {
+  question: string
+  screen: string
+  steps: string[]
+}
+export interface ScreenAsk {
+  image: string
+  device_id?: string
+  isp?: string
+  router?: string
+  question?: string
+  history?: ScreenTurn[]
+}
+
 export type Category = 'ads' | 'tracking' | 'telemetry' | 'needed' | 'malware' | 'unknown'
 export type DeviceType = 'tv' | 'phone' | 'laptop' | 'router' | 'other'
 
@@ -156,6 +183,49 @@ export interface LiveQuery {
   elapsed_ms: number | null
   category: Category
   owner: string | null
+}
+
+/** Setup → Home WiFi. Served by the backend: hand-checked, AI-written, or generic. */
+export type GuideSource = 'curated' | 'ai' | 'generic'
+export type Odds = 'usually' | 'often' | 'varies'
+
+export interface IspGuide {
+  key: string
+  name: string
+  /** How a sentence names it: "the Jio box" */
+  short: string
+  admin_urls: string[]
+  logins: { user: string; pass: string; on: string | null }[]
+  sticker_note: string | null
+  dns_locked: Odds
+  dns_note: string
+  cgnat: Odds
+  help_from: string
+  ask_for: string[]
+  own_ip: string | null
+  source: GuideSource
+}
+
+export interface RouterGuide {
+  key: string
+  name: string
+  /** Stored on the device; the backend picks matching setup steps */
+  brand: string
+  /** Encrypted DNS (DoT) to a custom server */
+  dot: 'yes' | 'advanced' | 'no'
+  admin_url: string
+  dns_menu: string | null
+  login: string
+  source: GuideSource
+}
+
+export interface ProviderDetection {
+  found: boolean
+  asn: number | null
+  country: string | null
+  /** The provider's name (ours when we have a guide, else the network's registered name) */
+  network: string | null
+  isp: IspGuide | null
 }
 
 export interface NetworkClient {
@@ -305,6 +375,11 @@ export const api = {
   settings: () => req<Settings>('GET', '/settings'),
   patchSettings: (b: Partial<Settings>) => req<Settings>('PATCH', '/settings', b),
   pollNow: () => req<{ ok: boolean }>('POST', '/poll-now'),
+  providers: () => req<{ isps: IspGuide[]; routers: RouterGuide[] }>('GET', '/providers'),
+  detectProvider: () => req<ProviderDetection>('GET', '/network/provider'),
+  ispGuide: (name: string) => req<IspGuide>('POST', '/providers/guide', { kind: 'isp', name }),
+  routerGuide: (name: string) => req<RouterGuide>('POST', '/providers/guide', { kind: 'router', name }),
+  screenshotHelp: (b: ScreenAsk) => req<ScreenAnswer>('POST', '/setup/screenshot', b),
   cgnat: (router_wan_ip: string) =>
     req<{ public_ip: string | null; cgnat: boolean | null; advice: string }>('POST', '/network/cgnat', { router_wan_ip }),
 }

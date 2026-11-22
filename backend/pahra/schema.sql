@@ -104,3 +104,12 @@ CREATE TABLE IF NOT EXISTS meta (
     key    TEXT PRIMARY KEY,
     value  TEXT
 );
+
+-- AI-written Home WiFi guides for providers / routers that aren't in data/providers.yaml
+CREATE TABLE IF NOT EXISTS provider_guides (
+    kind        TEXT NOT NULL,                   -- isp | router
+    key         TEXT NOT NULL,                   -- the typed name, normalised
+    guide       TEXT NOT NULL,                   -- JSON, as served
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (kind, key)
+);

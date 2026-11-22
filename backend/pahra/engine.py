@@ -14,6 +14,7 @@ from .pipeline.explainer import Explainer
 from .pipeline.lists import ListIndex, load_lists
 from .pipeline.run import Pipeline
 from .poller import Observed, Poller
+from .tracing import Tracing
 
 log = logging.getLogger("pahra.engine")
 
@@ -27,12 +28,19 @@ class Engine:
         self.sync = AdGuardSync(self.conn, self.ag, settings)
         self.lists = self._initial_lists()
         self.clues = ClueFetcher(self.conn, online=not settings.offline_lists)
+        self.tracing = Tracing.from_settings(settings)  # Langfuse; a no-op without keys
         if settings.llm_api_key and settings.llm_base_url:
             self.explainer = Explainer(
-                settings.llm_api_key, settings.llm_model, settings.gemini_batch_size, base_url=settings.llm_base_url
+                settings.llm_api_key,
+                settings.llm_model,
+                settings.gemini_batch_size,
+                base_url=settings.llm_base_url,
+                tracing=self.tracing,
             )
         else:
-            self.explainer = Explainer(settings.gemini_api_key, settings.gemini_model, settings.gemini_batch_size)
+            self.explainer = Explainer(
+                settings.gemini_api_key, settings.gemini_model, settings.gemini_batch_size, tracing=self.tracing
+            )
         self.pipeline = Pipeline(self.conn, self.lists, self.clues, self.explainer, self.sync)
         self.poller = Poller(
             self.conn, self.ag, settings.poll_interval_s, self._on_observed, self._on_tick, settings.query_log_hours
@@ -92,6 +100,7 @@ class Engine:
             log.warning("AdGuard not reachable at startup (%s); will retry", e)
         if background:
             self._tasks = [
+                asyncio.create_task(self.tracing.push_prompts(self.conn), name="langfuse-prompts"),
                 asyncio.create_task(self.poller.run_forever(), name="poller"),
                 asyncio.create_task(self._refresh_lists(), name="lists"),
                 asyncio.create_task(self._purge_loop(), name="purge"),
@@ -103,3 +112,4 @@ class Engine:
         await asyncio.gather(*self._tasks, return_exceptions=True)
         await self.clues.aclose()
         await self.ag.aclose()
+        await asyncio.to_thread(self.tracing.shutdown)

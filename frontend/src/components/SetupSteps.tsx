@@ -1,14 +1,31 @@
 import { Download } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
-import { withToken, type SetupGuide } from '../api'
+import { withToken, type DeviceType, type SetupGuide } from '../api'
 import { CopyField, Roll } from './ui'
 
-export default function SetupSteps({ deviceId, guide, brand }: { deviceId: string; guide: SetupGuide; brand: string | null }) {
+export default function SetupSteps({
+  deviceId,
+  guide,
+  brand,
+  type,
+}: {
+  deviceId: string
+  guide: SetupGuide
+  brand: string | null
+  type?: DeviceType
+}) {
   const v = guide.values
   const apple = (brand ?? '').toLowerCase() === 'apple'
+  const router = type === 'router'
   return (
     <div className="grid gap-4">
-      {guide.method === 'dot' && (
+      {guide.method === 'dot' && router && (
+        <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+          <CopyField label="TLS hostname" value={v.dot_hostname} />
+          <CopyField label="Server address" value={v.server_ip} />
+        </div>
+      )}
+      {guide.method === 'dot' && !router && (
         <div className="grid items-center gap-4 sm:grid-cols-[1fr_auto]">
           <CopyField label="Private DNS provider hostname" value={v.dot_hostname} />
           <div className="mx-auto rounded-md bg-white p-2">

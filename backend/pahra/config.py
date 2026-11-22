@@ -51,6 +51,14 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     # Interactive API docs (/docs, /redoc, /openapi.json). Off on a public server.
     api_docs: bool = True
+    # Setup → Home WiFi: detect the visitor's provider from their IP (Team Cymru over DoH).
+    provider_lookup: bool = True
+
+    # Langfuse: traces of every AI call + managed prompts. Off unless both keys are set.
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_base_url: str = "https://cloud.langfuse.com"
+    langfuse_environment: str = "development"
 
     @property
     def cache_dir(self) -> Path:

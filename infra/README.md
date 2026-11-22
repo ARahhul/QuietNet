@@ -209,7 +209,7 @@ AdGuard, the QuietNet engine and Caddy all run on the VM in Docker (`docker-comp
 .\infra\deploy-azure.ps1                       # uploads backend\ and infra\ to ~/quietnet
 ssh -t -i $HOME\.ssh\quietnet_azure azureuser@<vm-ip> bash quietnet/infra/cloud-secrets.sh <domain>
 ```
-`cloud-secrets.sh` asks for the deSEC (or Cloudflare) token and an optional AI key: either Gemini, or any OpenAI-compatible endpoint such as AICredits. Nothing you type is shown. It also generates the AdGuard password and the dashboard's access token on the VM, so they never travel anywhere. Re-run it to change a key; Enter keeps the saved value.
+`cloud-secrets.sh` asks for the deSEC (or Cloudflare) token, an optional AI key (either Gemini, or any OpenAI-compatible endpoint such as AICredits), and optional Langfuse keys for tracing AI calls and managing their prompts. Secrets you type are not shown. It also generates the AdGuard password and the dashboard's access token on the VM, so they never travel anywhere. Re-run it to change a key; Enter keeps the saved value.
 
 **Start, and after every code change:**
 ```powershell

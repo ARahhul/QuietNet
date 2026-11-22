@@ -22,6 +22,29 @@
       "port": 8000
     },
     {
+      "name": "fake-llm",
+      "runtimeExecutable": "C:\\Projects\\pahra\\backend\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["-m", "devtools.fake_llm", "--port", "3200"],
+      "cwd": "C:\\Projects\\pahra\\backend",
+      "port": 3200
+    },
+    {
+      "name": "api-fake-ai",
+      "runtimeExecutable": "C:\\Projects\\pahra\\backend\\.venv\\Scripts\\uvicorn.exe",
+      "runtimeArgs": ["pahra.main:create_app", "--factory", "--port", "8000"],
+      "cwd": "C:\\Projects\\pahra\\backend",
+      "env": {
+        "ADGUARD_URL": "http://127.0.0.1:3100",
+        "OFFLINE_LISTS": "true",
+        "DB_PATH": "pahra-dev.db",
+        "VM_IP": "203.0.113.10",
+        "LLM_BASE_URL": "http://127.0.0.1:3200/v1",
+        "LLM_API_KEY": "dev",
+        "LLM_MODEL": "fake-vision"
+      },
+      "port": 8000
+    },
+    {
       "name": "dashboard",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],

@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type Device, type DeviceType, type SetupGuide } from '../api'
 import AssistantPanel from '../components/assistant/AssistantPanel'
+import RouterWizard, { type RouterPlan } from '../components/RouterWizard'
+import ScreenshotHelp from '../components/ScreenshotHelp'
 import SetupSteps from '../components/SetupSteps'
 import { DeviceIcon, Roll } from '../components/ui'
 
@@ -22,7 +24,7 @@ const CHOICES: Choice[] = [
   { key: 'windows', label: 'Windows laptop', hint: 'Encrypted DNS (DoH)', type: 'laptop', brand: 'Windows', method: 'doh' },
   { key: 'mac', label: 'Mac', hint: 'Install a profile', type: 'laptop', brand: 'Apple', method: 'doh' },
   { key: 'tv', label: 'Smart TV / streaming box', hint: 'LG, Samsung, Android TV, Fire TV', type: 'tv', brand: null },
-  { key: 'router', label: 'Home router (covers everything)', hint: 'Plain DNS + linked home IP', type: 'router', brand: null, method: 'ipv4_demo' },
+  { key: 'router', label: 'Home WiFi (covers everything)', hint: 'Finds your provider: Jio, Airtel, ACT or any other', type: 'router', brand: null, method: 'ipv4_demo' },
 ]
 
 const TV_BRANDS = [
@@ -40,13 +42,18 @@ export default function Setup() {
   const [created, setCreated] = useState<{ device: Device; setup: SetupGuide } | null>(null)
 
   const create = useMutation({
-    mutationFn: () =>
-      api.createDevice({
-        name: name.trim() || choice!.label,
+    mutationFn: async (plan?: RouterPlan) => {
+      const r = await api.createDevice({
+        name: plan?.name ?? (name.trim() || choice!.label),
         type: choice!.type,
-        brand: tvBrand?.brand ?? choice!.brand,
-        setup_method: tvBrand?.method ?? choice!.method,
-      }),
+        brand: plan?.brand ?? tvBrand?.brand ?? choice!.brand,
+        setup_method: plan?.method ?? tvBrand?.method ?? choice!.method,
+      })
+      if (!plan?.linkedIp) return r
+      // Plain DNS on the router: QuietNet tells this home apart by its public IP.
+      const { device } = await api.patchDevice(r.device.id, { linked_ip: plan.linkedIp, allow_shared_ipv4: true })
+      return { ...r, device, setup: await api.setup(device.id) }
+    },
     onSuccess: (r) => {
       setCreated(r)
       qc.invalidateQueries({ queryKey: ['devices'] })
@@ -63,6 +70,7 @@ export default function Setup() {
 
   const health = useQuery({ queryKey: ['health'], queryFn: api.health })
   const assistantReady = !!health.data?.companion.connected
+  const aiReady = !!health.data?.llm.enabled
 
   return (
     <div className="max-w-5xl">
@@ -123,7 +131,19 @@ export default function Setup() {
             </div>
           )}
 
-          {choice && (choice.key !== 'tv' || tvBrand) && (
+          {choice?.key === 'router' && (
+            <RouterWizard
+              onCreate={(plan) => create.mutate(plan)}
+              onPerDevice={() => {
+                setChoice(null)
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
+              busy={create.isPending}
+              error={create.isError ? (create.error as Error).message : null}
+            />
+          )}
+
+          {choice && choice.key !== 'router' && (choice.key !== 'tv' || tvBrand) && (
             <div className="card mt-4 grid max-w-3xl gap-3 p-4">
               <label className="text-sm font-medium">
                 Name it
@@ -134,7 +154,7 @@ export default function Setup() {
                   onChange={(e) => setName(e.target.value)}
                 />
               </label>
-              <button className="btn-primary" disabled={create.isPending} onClick={() => create.mutate()}>
+              <button className="btn-primary" disabled={create.isPending} onClick={() => create.mutate(undefined)}>
                 <Roll>{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Get my setup steps</Roll>
               </button>
               {create.isError && <div className="text-sm text-danger">{(create.error as Error).message}</div>}
@@ -164,9 +184,10 @@ export default function Setup() {
             )}
           </div>
           <div className="card p-5">
-            <SetupSteps deviceId={created.device.id} guide={created.setup} brand={created.device.brand} />
+            <SetupSteps deviceId={created.device.id} guide={created.setup} brand={created.device.brand} type={created.device.type} />
           </div>
-          {created.device.type === 'router' || created.setup.method === 'ipv4_demo' ? <CgnatCheck /> : null}
+          {aiReady && <ScreenshotHelp deviceId={created.device.id} />}
+          {created.setup.method === 'ipv4_demo' && !created.device.linked_ip ? <CgnatCheck /> : null}
           <button
             className="btn-ghost w-fit"
             onClick={() => {

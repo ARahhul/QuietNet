@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Store the secrets the cloud stack needs, on the VM itself. Run it over an interactive SSH session:
 #   ssh -t -i ~/.ssh/quietnet_azure azureuser@<vm-ip> bash quietnet/infra/cloud-secrets.sh quietnet.in
-# You paste the deSEC token (and optionally a Gemini API key); nothing is echoed or logged.
+# You paste the deSEC token (and optionally AI and Langfuse keys); secrets are not echoed or logged.
 # The AdGuard admin password and the dashboard access token are generated here and never leave the VM
 # unless you read them yourself:  grep API_TOKEN ~/quietnet/infra/backend.env
 # Safe to re-run: existing values are kept unless you type a new one.
@@ -51,6 +51,20 @@ if [ -n "$llm" ]; then
   LLM_MODEL="${m:-${LLM_MODEL:-openai/gpt-6-luna}}"
 fi
 unset llm
+
+# --- Langfuse (optional): traces of every AI call, and the prompts they use ---
+LANGFUSE_PUBLIC_KEY="$(get LANGFUSE_PUBLIC_KEY)"
+LANGFUSE_SECRET_KEY="$(get LANGFUSE_SECRET_KEY)"
+LANGFUSE_BASE_URL="$(get LANGFUSE_BASE_URL)"
+read -rp "Langfuse public key, pk-lf-... (optional, Enter to skip/keep): " lfp
+if [ -n "$lfp" ]; then
+  LANGFUSE_PUBLIC_KEY="$lfp"
+  read -rsp "   Langfuse secret key, sk-lf-...: " lfs; echo
+  [ -n "$lfs" ] && LANGFUSE_SECRET_KEY="$lfs"
+  read -rp "   Langfuse URL [${LANGFUSE_BASE_URL:-https://us.cloud.langfuse.com}]: " lfu
+  LANGFUSE_BASE_URL="${lfu:-${LANGFUSE_BASE_URL:-https://us.cloud.langfuse.com}}"
+fi
+unset lfp lfs lfu
 # The VM's public address, as the world sees it through our own DNS name
 VM_IP="$(getent ahostsv4 "$DNS_HOST" | awk 'NR==1{print $1}')"
 [ -n "$VM_IP" ] || VM_IP="$(get VM_IP)"
@@ -64,6 +78,9 @@ GEMINI_API_KEY=$GEMINI_API_KEY
 LLM_API_KEY=$LLM_API_KEY
 LLM_BASE_URL=$LLM_BASE_URL
 LLM_MODEL=$LLM_MODEL
+LANGFUSE_PUBLIC_KEY=$LANGFUSE_PUBLIC_KEY
+LANGFUSE_SECRET_KEY=$LANGFUSE_SECRET_KEY
+LANGFUSE_BASE_URL=$LANGFUSE_BASE_URL
 DNS_HOSTNAME=$DNS_HOST
 VM_IP=$VM_IP
 CORS_ORIGINS=https://$DOMAIN,https://quietnet.web.app,http://localhost:5173,http://127.0.0.1:5173
@@ -73,5 +90,7 @@ echo "   wrote $(pwd)/$ENV_FILE (AdGuard password and dashboard token generated 
 if [ -n "$LLM_API_KEY" ] && [ -n "$LLM_BASE_URL" ]; then echo "   AI explanations: $LLM_MODEL via $LLM_BASE_URL"
 elif [ -n "$GEMINI_API_KEY" ]; then echo "   AI explanations: Gemini"
 else echo "   AI explanations: off (re-run this script to add a key)"; fi
+if [ -n "$LANGFUSE_PUBLIC_KEY" ] && [ -n "$LANGFUSE_SECRET_KEY" ]; then echo "   Tracing: Langfuse at ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}"
+else echo "   Tracing: off"; fi
 echo
 echo "Next:  bash ~/quietnet/infra/cloud-up.sh $DOMAIN"

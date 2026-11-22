@@ -27,6 +27,7 @@ services:
     env_file: ./backend.env
     environment:
       ADGUARD_URL: http://adguardhome:3000
+      LANGFUSE_ENVIRONMENT: production
       # The companion (LAN scan, ADB, TV relay) has to run on a computer at home, not here.
       COMPANION_ENABLED: "false"
       API_DOCS: "false"            # don't publish a map of every endpoint

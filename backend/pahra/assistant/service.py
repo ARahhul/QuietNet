@@ -58,7 +58,7 @@ class AssistantService:
         try:
             if self.genai is not None:
                 try:
-                    await AgentRunner(s, self.genai, self.engine.settings.gemini_model).run()
+                    await AgentRunner(s, self.genai, self.engine.settings.gemini_model, getattr(self.engine, "tracing", None)).run()
                 except (Cancelled, asyncio.CancelledError):
                     raise
                 except Exception as e:  # LLM outage / quota -> deterministic playbook

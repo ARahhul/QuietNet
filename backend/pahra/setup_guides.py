@@ -51,7 +51,34 @@ def setup_guide(s: Settings, device: dict, forwarder_ip: str | None = None) -> d
     vm = s.vm_ip or "<your QuietNet server IP>"
     method = device["setup_method"]
     values = {"dot_hostname": host, "doh_url": url, "server_ip": vm}
-    if method == "dot":
+    brand = (device.get("brand") or "").lower()
+    if method == "dot" and device.get("type") == "router":
+        # Encrypted DNS on the router: one ClientID for the whole home, works behind CGNAT.
+        if brand == "asus":
+            steps = [
+                "Open http://router.asus.com from a device on your WiFi and log in.",
+                "Go to Advanced Settings → WAN → Internet Connection, and scroll to WAN DNS Setting.",
+                "Set DNS Privacy Protocol to DNS-over-TLS (DoT) and DNS-over-TLS Profile to Strict.",
+                f"Under DNS-over-TLS Server List, add: Address {vm}, TLS Port 853, TLS Hostname {host}. Click + to add it.",
+                "Remove any other servers from that list, then click Apply. The router restarts its internet connection.",
+                "Open any website on any device. This page turns green within 30 seconds.",
+            ]
+        elif brand in ("openwrt", "gl.inet"):
+            steps = [
+                "GL.iNet: open http://192.168.8.1 → Applications → AdGuard Home, turn it on and open its Settings page.",
+                f"In AdGuard Home → Settings → DNS settings, set Upstream DNS servers to tls://{host} (only that line) and Apply.",
+                f"Plain OpenWrt: install stubby, add a server with address {vm}, port 853 and tls_auth_name {host}, "
+                "then point dnsmasq at 127.0.0.1#5453.",
+                "Open any website on any device. This page turns green within 30 seconds.",
+            ]
+        else:
+            steps = [
+                "Open your router's admin page and find the DNS settings (often under WAN, Internet or Advanced).",
+                "Look for DNS-over-TLS, DoT, Private DNS or DNS privacy. If there's no such option, this router can't do it.",
+                f"Server address {vm}, port 853, TLS / authentication hostname {host}. Save.",
+                "Open any website on any device. This page turns green within 30 seconds.",
+            ]
+    elif method == "dot":
         steps = [
             "Open Settings → Network & internet (or Connections → More connection settings).",
             "Tap Private DNS → Private DNS provider hostname.",
@@ -95,13 +122,19 @@ def setup_guide(s: Settings, device: dict, forwarder_ip: str | None = None) -> d
             "Keep the laptop on and QuietNet running while the TV is in use. If the laptop sleeps, the TV can't look up names.",
             "To stop: set the TV's DNS back to automatic, then delete the TV here.",
         ]
-    else:  # router / ipv4_demo / ipv6
+    else:  # router / ipv4_demo / ipv6: plain DNS, recognised by the home's public IP
+        linked = device.get("linked_ip")
         steps = [
-            "Open your router's admin page (often http://192.168.1.1 or http://192.168.29.1 on JioFiber).",
-            f"Find DNS settings and set Primary DNS to {vm}. Leave Secondary EMPTY (or the same IP).",
+            "Open your router's admin page (the address is on its sticker, often http://192.168.1.1 or http://192.168.0.1).",
+            f"Find the DNS settings (often under WAN, Internet or DHCP) and set Primary DNS to {vm}.",
+            "Leave Secondary DNS empty, or set it to the same address. Any other server there lets ads slip through.",
             "Save and restart the router. Every device on your WiFi, including smart TVs, is now covered.",
-            "QuietNet links your home IP automatically when you open this page from your home WiFi.",
-            "If your ISP uses CGNAT (JioFiber, Airtel, ACT often do), IPv4 linking is unsafe. Use IPv6 linking or a phone hotspot for the demo.",
+            (
+                f"QuietNet recognises your home by its public IP {linked}. If your provider changes it, "
+                "open Setup again from home to update it."
+                if linked
+                else "QuietNet recognises your home by its public IP: link it from Setup while you're on your home WiFi."
+            ),
         ]
     return {"method": method, "values": values, "steps": steps}
 
