@@ -18,7 +18,7 @@
         "headers": [
           {
             "key": "Content-Security-Policy",
-            "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.quietnet.in; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+            "value": "default-src 'self'; script-src 'self' https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://lh3.googleusercontent.com; font-src 'self'; connect-src 'self' https://api.quietnet.in https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src https://cobalt-skies.firebaseapp.com; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
           },
           {
             "key": "X-Content-Type-Options",
@@ -38,7 +38,7 @@
           },
           {
             "key": "Cross-Origin-Opener-Policy",
-            "value": "same-origin"
+            "value": "same-origin-allow-popups"
           }
         ]
       },
@@ -70,5 +70,15 @@
         ]
       }
     ]
+  },
+  "emulators": {
+    "auth": {
+      "host": "127.0.0.1",
+      "port": 9099
+    },
+    "ui": {
+      "enabled": false
+    },
+    "singleProjectMode": true
   }
 }

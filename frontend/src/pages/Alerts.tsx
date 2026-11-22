@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ShieldAlert, Tv, Wrench } from 'lucide-react'
+import { Globe2, ShieldAlert, Tv, Wrench } from 'lucide-react'
 import { api } from '../api'
 import { Empty, Roll, timeAgo } from '../components/ui'
 
@@ -9,6 +9,7 @@ const TITLE: Record<string, string> = {
   odd_behaviour: 'Odd behaviour',
   acr_tracker: 'Your TV is watching you',
   new_tracker: 'Blocked automatically',
+  home_address: 'Home address followed',
 }
 
 export default function Alerts() {
@@ -24,7 +25,13 @@ export default function Alerts() {
         {alerts.data?.map((a) => (
           <article key={a.id} className={`card p-5 ${a.read ? 'opacity-70' : ''} ${a.type === 'malware' ? 'border-danger/60' : 'card-hover'}`}>
             <div className="flex items-center gap-2 text-xs text-muted">
-              {a.type === 'acr_tracker' ? <Tv className="h-4 w-4 text-warn" /> : <ShieldAlert className="h-4 w-4 text-danger" />}
+              {a.type === 'acr_tracker' ? (
+                <Tv className="h-4 w-4 text-warn" />
+              ) : a.type === 'home_address' ? (
+                <Globe2 className="h-4 w-4 text-guard" />
+              ) : (
+                <ShieldAlert className="h-4 w-4 text-danger" />
+              )}
               <span className="font-medium text-white">{TITLE[a.type] ?? a.type}</span>
               <span>· {a.device_name ?? 'device'} · {timeAgo(a.created_at)}</span>
             </div>

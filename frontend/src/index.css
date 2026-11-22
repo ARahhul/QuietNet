@@ -40,6 +40,23 @@
   --color-blocked: #e0604a;
   --color-cached: #199e70;
 
+  /* Homepage: the headline's lines rise into place once, on load. */
+  --animate-rise: rise 900ms cubic-bezier(0.2, 0.7, 0.1, 1) both;
+  @keyframes rise {
+    from {
+      transform: translateY(105%);
+    }
+    to {
+      transform: none;
+    }
+  }
+  --animate-fade-in: fade-in 700ms var(--ease-glide) both;
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
   /* A new row in the live log washes in, then settles. */
   --animate-row-in: row-in 1.6s var(--ease-glide);
   @keyframes row-in {
@@ -56,6 +73,17 @@ html,
 body,
 #root {
   height: 100%;
+}
+
+@layer base {
+  /*
+   * A plain `grid` (one column) sizes that column to its widest unwrapped content, so a long device name or domain
+   * pushed rows out of their card. Default every grid to a column that can shrink to its container; any grid-cols-*
+   * utility still wins (this sits in the base layer with zero specificity).
+   */
+  :where(.grid) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 body {
@@ -198,5 +226,67 @@ body {
     &:hover::before {
       opacity: 1;
     }
+  }
+}
+
+/* A struck-out name: the line draws across it from the left when .is-quiet is added (homepage stream). */
+@utility strike-draw {
+  background-image: linear-gradient(var(--color-blocked), var(--color-blocked));
+  background-position: 0 58%;
+  background-repeat: no-repeat;
+  background-size: 0% var(--strike, 1.5px);
+  transition:
+    background-size var(--strike-time, 450ms) var(--ease-glide),
+    color var(--strike-time, 450ms) var(--ease-glide);
+  &.is-quiet {
+    background-size: 100% var(--strike, 1.5px);
+    color: var(--color-muted);
+  }
+}
+
+/*
+ * Homepage footer, the "hush" wave (components/SiteFooter.tsx). Each bar rests as a dot. When the footer comes into
+ * view (.is-live) a burst of noise sweeps across, then settles into a slow travelling ripple. --x is the pointer's
+ * position in bars: bars near it rise (.hush-lift). Reduced motion keeps the resting line.
+ */
+.hush-bar {
+  transform: scaleY(0.06);
+  opacity: 0.85;
+}
+.hush.is-live .hush-bar {
+  animation:
+    hush-burst 1500ms cubic-bezier(0.3, 0.7, 0.2, 1) var(--delay) both,
+    hush-ripple 3.6s ease-in-out var(--ripple-delay) infinite;
+}
+@keyframes hush-burst {
+  0% {
+    transform: scaleY(0.06);
+  }
+  30% {
+    transform: scaleY(var(--peak));
+  }
+  100% {
+    transform: scaleY(0.06);
+  }
+}
+@keyframes hush-ripple {
+  0%,
+  100% {
+    transform: scaleY(0.06);
+  }
+  50% {
+    transform: scaleY(var(--swell));
+  }
+}
+.hush-lift {
+  transform: scaleY(calc(1 + max(0, 1 - max(var(--x) - var(--i), var(--i) - var(--x)) / 7) * 3.5));
+  transition: transform 400ms var(--ease-glide);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hush.is-live .hush-bar {
+    animation: none;
+  }
+  .hush-lift {
+    transform: none;
   }
 }

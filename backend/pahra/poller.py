@@ -7,6 +7,7 @@ sleeps and comes back, polling resumes where it left off (AdGuard keeps 24 h of 
 import asyncio
 import logging
 import sqlite3
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable
@@ -55,13 +56,29 @@ class Poller:
         self.last_poll: str | None = None
         self.last_error: str | None = None
         self._wake = asyncio.Event()
+        self.running = False
+        self.read_until = 0.0  # monotonic time up to which the query log has been read and processed
 
     def poke(self) -> None:
         """Poll now instead of waiting for the next tick (e.g. right after a device is added)."""
         self._wake.set()
 
+    async def poll_fresh(self, timeout: float = 8.0) -> None:
+        """Return once the query log has been read from now (for "is it working yet?" checks)."""
+        if not self.running:  # no background loop (tests, CLI): poll right here
+            observed = await self.poll_once()
+            if observed and self.on_observed:
+                await self.on_observed(observed)
+            return
+        t0 = time.monotonic()
+        self.poke()
+        while self.read_until < t0 and time.monotonic() < t0 + timeout:
+            await asyncio.sleep(0.2)
+
     async def run_forever(self) -> None:
+        self.running = True
         while True:
+            started = time.monotonic()
             try:
                 observed = await self.poll_once()
                 if observed and self.on_observed:
@@ -74,6 +91,7 @@ class Poller:
                 log.warning("poll failed: %s", e)
             except Exception:  # keep the loop alive; log the bug
                 log.exception("poller iteration crashed")
+            self.read_until = started
             try:
                 await asyncio.wait_for(self._wake.wait(), timeout=self.interval_s)
             except asyncio.TimeoutError:

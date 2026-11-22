@@ -82,8 +82,9 @@ def nice_name(d: dict) -> str:
 
 
 class AssistantSession:
-    def __init__(self, engine, companion: CompanionClient, description: str):
+    def __init__(self, engine, companion: CompanionClient, description: str, user_id: str | None = None):
         self.id = uuid.uuid4().hex[:12]
+        self.user_id = user_id or engine.user_id  # the account the TV gets added to
         self.engine = engine
         self.companion = companion
         self.description = description.strip()[:200]
@@ -196,7 +197,7 @@ class AssistantSession:
         did = new_id()
         e.conn.execute(
             "INSERT INTO devices(id, user_id, client_id, name, type, brand, setup_method, lan_ip, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
-            (did, e.user_id, cid, nice, "tv", brand, setup_method, lan_ip, now_iso()),
+            (did, self.user_id, cid, nice, "tv", brand, setup_method, lan_ip, now_iso()),
         )
         self.device = row_to_dict(e.conn.execute("SELECT * FROM devices WHERE id = ?", (did,)).fetchone())
         # The hostname / DoH URL identify this device to the DNS server: keep them away from the LLM.

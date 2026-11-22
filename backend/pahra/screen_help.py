@@ -35,7 +35,7 @@ UNKNOWN = {
     "<TLS_HOSTNAME>": "the TLS hostname QuietNet shows once you add the router",
     "<DOH_URL>": "the DNS-over-HTTPS URL QuietNet shows for this device",
     "<TV_DNS_SERVER>": "the address QuietNet shows for the TV",
-    "<DNS_SERVER>": "QuietNet's DNS server address",
+    "<DNS_SERVER>": "the DNS server QuietNet shows once you add the router",
 }
 METHOD = {
     "dot_router": "encrypted DNS (DNS-over-TLS) on the home WiFi router",
@@ -137,10 +137,18 @@ def context_for(settings, device: dict | None, forwarder_ip: str | None, isp: st
             *(f"{i}. {mask(s, values)}" for i, s in enumerate(g["steps"], 1)),
         ]
     else:
-        values = {"<DNS_SERVER>": settings.vm_ip} if settings.vm_ip else {}
+        # QuietNet only answers a home once its router is added (AdGuard's allow-list), so no values yet:
+        # changing the router's DNS now would cut the home off the internet.
+        values = {}
         lines = [
             "They are setting up QuietNet for the whole home on their WiFi router: getting into its admin page "
-            "and finding the DNS settings. They haven't added the router in QuietNet yet."
+            "and finding the DNS settings.",
+            "They haven't added the router in QuietNet yet, and QuietNet only answers a home once it's added, so "
+            "changing any DNS setting now would cut their internet off. Help them log in and find a page with DNS "
+            "boxes (Primary / Secondary DNS, on the DHCP / LAN page or the WAN / Internet page: either is right), "
+            "but don't tell them to change any DNS value. Once they're on such a page they are on track: tell them to "
+            "keep it open and first click QuietNet's \"Set up …\" button (under its guide), which then shows the exact "
+            "values to enter.",
         ]
     if isp:
         lines.append(f"Their internet provider: {_text(isp, 60)}.")
@@ -165,6 +173,11 @@ def history_text(history: list[dict], values: dict[str, str]) -> str:
     return ("\nEarlier in this conversation (oldest first):\n" + "\n".join(turns) + "\n") if turns else ""
 
 
+def _tidy(text: str) -> str:
+    """Menu names read off a screen sometimes keep their bullet: "-LAN Settings" -> "LAN Settings"."""
+    return re.sub(r'(^|\s)"[-–•·>]\s*(?=\w)', r'\1"', text)
+
+
 def clean(answer: dict, values: dict[str, str]) -> tuple[dict, int]:
     """The model's answer, checked and with QuietNet's values filled in; and how many items were dropped."""
     dropped = 0
@@ -175,12 +188,16 @@ def clean(answer: dict, values: dict[str, str]) -> tuple[dict, int]:
         dropped += bad
         return bool(t) and not bad
 
-    steps = [s for s in (unmask(_text(x), values) for x in _list(answer.get("steps"))[:6]) if keep(s)]
+    steps = [s for s in (_tidy(unmask(_text(x), values)) for x in _list(answer.get("steps"))[:6]) if keep(s)]
+    dns_boxes = [b for b in (_text(x, 60) for x in _list(answer.get("dns_boxes"))[:8]) if b]
     fill = []
     for f in _list(answer.get("fill"))[:6]:
         if not isinstance(f, dict):
             continue
-        field, value = _text(f.get("field"), 60), unmask(_text(f.get("value"), 160), values)
+        raw = _text(f.get("value"), 160)
+        if any(ph not in values for ph in re.findall(r"<[A-Z_]{3,20}>", raw)):
+            continue  # a value this setup doesn't have yet: nothing to copy
+        field, value = _text(f.get("field"), 60), unmask(raw, values)
         if not field or not value:
             continue
         if SECRET_FIELD.search(field):
@@ -188,11 +205,12 @@ def clean(answer: dict, values: dict[str, str]) -> tuple[dict, int]:
             continue
         if keep(value):
             fill.append({"field": field, "value": value})
-    reply = unmask(_text(answer.get("reply"), 300), values)
+    reply = _tidy(unmask(_text(answer.get("reply"), 300), values))
     warning = unmask(_text(answer.get("warning")), values)
     nxt = unmask(_text(answer.get("next"), 200), values)
     out = {
         "screen": unmask(_text(answer.get("screen"), 200), values) or "I couldn't tell what this screen is.",
+        "dns_boxes": dns_boxes,
         "reply": reply if reply and keep(reply) else "",
         "on_track": answer.get("on_track") is not False,
         "steps": steps,
@@ -226,19 +244,65 @@ async def read_screen(
         "question": question or None,
         "turn": len(history) + 1,
     }
+    ask = dict(
+        images=[image],
+        context=context,
+        question=mask(_text(question, 300), values) or "(none: they want to know what to do next)",
+    )
+    earlier = history_text(history, values)
+    fixed = None
     with explainer.tracing.trace("screen-help", input=meta, tags=("setup",)) as t:
         try:
-            answer = await explainer.ask_json(
-                SCREEN_HELP,
-                images=[image],
-                context=context,
-                history=history_text(history, values),
-                question=mask(_text(question, 300), values) or "(none: they want to know what to do next)",
-            )
+            out, dropped = clean(await explainer.ask_json(SCREEN_HELP, history=earlier, **ask), values)
+            if out["dns_boxes"] and not out["on_track"]:
+                # It read the DNS boxes yet sent them elsewhere ("DHCP isn't the DNS page"): once more, pointing that out.
+                fixed = "retried"
+                note = (
+                    f"\nYour first answer contradicted itself: you saw DNS boxes ({', '.join(out['dns_boxes'])}) on this "
+                    "screen but said it was the wrong page. A page with DNS boxes is the right page: answer again for "
+                    "THIS page, with on_track true.\n"
+                )
+                out, dropped = clean(await explainer.ask_json(SCREEN_HELP, history=earlier + mask(note, values), **ask), values)
         except Exception as e:
             t.update(level="ERROR", status_message=f"{e.__class__.__name__}: {e}"[:500])
             raise ReadFailed(str(e)) from e
-        out, dropped = clean(answer, values)
+        if out["dns_boxes"] and not out["on_track"]:
+            # Still: never send someone away from the page where the values go.
+            fixed = "forced"
+            out |= {"on_track": True, "steps": [], "next": "", "reply": _right_page(out["dns_boxes"], values)}
+        if not values and out["dns_boxes"]:
+            # The router isn't added yet, so nothing on this page may change (QuietNet wouldn't answer the home):
+            # whatever the model listed to tick or type, the next step is QuietNet's "Set up …" button.
+            out |= {
+                "on_track": True,
+                "steps": [
+                    "Keep this page open and don't change anything on it yet.",
+                    'In QuietNet, click "Set up …" under the guide: it adds your router and shows what to type in '
+                    f"{out['dns_boxes'][0]}.",
+                    "Come back to this page and fill it in as QuietNet shows.",
+                ],
+                "fill": [],
+                "warning": "",
+                "next": "",
+                "done": False,
+                "reply": _answer_then_set_up(out["reply"]) if question.strip() and out["reply"] else _right_page(out["dns_boxes"], values),
+            }
         # The model's own reply (placeholders, no real values) is on the generation; here just the outcome.
-        t.update(output={k: out[k] for k in ("screen", "on_track", "done")} | {"steps": len(out["steps"]), "fill": len(out["fill"]), "dropped": dropped})
+        t.update(
+            output={k: out[k] for k in ("screen", "dns_boxes", "on_track", "done")}
+            | {"steps": len(out["steps"]), "fill": len(out["fill"]), "dropped": dropped, "fixed": fixed}
+        )
     return out
+
+
+def _answer_then_set_up(reply: str) -> str:
+    if "set up" in reply.lower():
+        return reply
+    return reply.rstrip() + ' Before changing anything here, click QuietNet\'s "Set up …" button.'
+
+
+def _right_page(boxes: list[str], values: dict[str, str]) -> str:
+    here = f"This is the right page: {' and '.join(boxes[:2])} {'are' if len(boxes) > 1 else 'is'} here."
+    if not values:  # router not added yet
+        return here + ' Keep it open and first click QuietNet\'s "Set up …" button for the values to enter.'
+    return here + " Fill them in as QuietNet's steps above say, then save."

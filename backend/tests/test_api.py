@@ -49,7 +49,11 @@ def test_full_flow_block_all_and_undo(api, fake):
     assert "rahhul-lg-tv" in fake.clients  # persistent client created in AdGuard
     phone = api.post("/api/devices", json={"name": "Rahhul Phone", "type": "phone", "brand": "Android"}, headers=H).json()
     assert phone["setup"]["values"]["dot_hostname"] == "rahhul-phone.dns.pahra.app"
-    assert set(fake.access["allowed_clients"]) == {"rahhul-lg-tv", "rahhul-phone"}
+    # Rescue mode: AdGuard lets everyone in, and a catch-all answers strangers only for Dynamic DNS / time names
+    assert fake.access["allowed_clients"] == []
+    assert "||*^$client=~'rahhul-lg-tv'|~'rahhul-phone'" in fake.rules
+    assert fake.match("example.com", "stranger")[0] and not fake.match("dynupdate.no-ip.com", "stranger")[0]
+    assert not fake.match("example.com", "rahhul-phone")[0]
 
     for q in ["tkacr.alphonso.tv", "us.ad.lgsmartad.com", "api-global.netflix.com", "googleads.g.doubleclick.net"]:
         fake.record("rahhul-lg-tv", q)
@@ -69,7 +73,8 @@ def test_full_flow_block_all_and_undo(api, fake):
     assert r["synced"] and r["count"] >= 3
     assert fake.match("alphonso.tv", "rahhul-lg-tv")[0]
     assert fake.match("app-measurement.com", "rahhul-phone")[0]
-    assert not fake.match("alphonso.tv", "someone-else")[0]
+    blocked, rules = fake.match("alphonso.tv", "someone-else")  # a stranger: only ever the rescue catch-all
+    assert not blocked or all(r.startswith("||*^$client=~") for r in rules)
     assert api.get("/api/suggestions", headers=H).json() == []
 
     api.post("/api/decisions/undo-bulk", json={"ids": [d["id"] for d in r["decisions"]]}, headers=H)

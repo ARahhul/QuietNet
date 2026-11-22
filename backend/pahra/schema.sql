@@ -4,7 +4,8 @@ CREATE TABLE IF NOT EXISTS users (
     id          TEXT PRIMARY KEY,
     email       TEXT NOT NULL UNIQUE,
     auto_mode   INTEGER NOT NULL DEFAULT 0,
-    created_at  TEXT NOT NULL
+    created_at  TEXT NOT NULL,
+    firebase_uid TEXT                            -- Firebase Authentication user (NULL: the operator before sign-in)
 );
 
 CREATE TABLE IF NOT EXISTS devices (
@@ -16,6 +17,7 @@ CREATE TABLE IF NOT EXISTS devices (
     brand         TEXT,                          -- LG | Samsung | Apple | Android | Amazon | Google ...
     setup_method  TEXT NOT NULL,                 -- dot | doh | ipv6 | ipv4_demo | adb | forwarder
     linked_ip     TEXT,
+    ddns_host     TEXT,                          -- Dynamic DNS name QuietNet follows to keep linked_ip current
     lan_ip        TEXT,                          -- forwarder TVs: the TV's LAN IP (the laptop relay maps it to client_id)
     last_seen     TEXT,
     created_at    TEXT NOT NULL

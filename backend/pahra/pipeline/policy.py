@@ -58,11 +58,13 @@ def apply_policy(conn: sqlite3.Connection, device_id: str, domain: str, qnames: 
         conn.execute("UPDATE decisions SET undone_at = ? WHERE id = ?", (now_iso(), mine["id"]))
         mine, changed = None, True
 
-    # 4. auto-mode: HIGH confidence ads/trackers get blocked without asking (then notify)
+    # 4. auto-mode: HIGH confidence ads/trackers get blocked without asking (then notify), but only when
+    #    blocking them is low risk; anything that might break an app or site waits in Suggestions for the person.
     if (
         user["auto_mode"]
         and dom["confidence"] == "high"
         and dom["category"] in AUTO_BLOCK_CATEGORIES
+        and dom["break_risk"] == "low"
         and (mine is None or mine["action"] == "quarantine")
         and household is None
     ):

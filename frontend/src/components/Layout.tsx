@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { Activity, Ban, Bell, ChartColumn, Cpu, Plus, Settings, ShieldCheck } from 'lucide-react'
-import { Link, NavLink, Outlet } from 'react-router-dom'
+import { Activity, Ban, Bell, ChartColumn, Cpu, LogOut, Plus, Settings, ShieldCheck, UserRound } from 'lucide-react'
+import { useEffect } from 'react'
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { api } from '../api'
-import { Roll } from './ui'
+import { signOut, takeMovedHome, useSession } from '../session'
+import { Roll, useToast } from './ui'
 
 const NAV = [
   { to: '/', label: 'Suggestions', icon: ShieldCheck, end: true },
@@ -19,6 +21,11 @@ export default function Layout() {
   const alerts = useQuery({ queryKey: ['alerts'], queryFn: api.alerts, refetchInterval: 15000 })
   const unread = alerts.data?.filter((a) => !a.read).length ?? 0
   const ok = health.data?.adguard.ok
+  const toast = useToast()
+
+  useEffect(() => {
+    if (takeMovedHome()) toast({ text: 'Your devices moved into your account. Sign in anywhere to see them.' })
+  }, [toast])
 
   return (
     <div className="flex min-h-full">
@@ -50,6 +57,7 @@ export default function Layout() {
           <Link to="/setup" className="btn-light w-full">
             <Roll><Plus className="h-4 w-4" /> Connect a device</Roll>
           </Link>
+          <AccountRow />
           <div className="grid gap-1.5 text-xs text-muted">
             <div className="flex items-center">
               <StatusDot ok={ok} />
@@ -100,6 +108,38 @@ export default function Layout() {
           </NavLink>
         ))}
       </nav>
+    </div>
+  )
+}
+
+function AccountRow() {
+  const session = useSession()
+  const navigate = useNavigate()
+  if (session.status !== 'signed-in') return null
+  const label = session.via === 'firebase' ? (session.email ?? session.name ?? 'Signed in') : 'Access token'
+  return (
+    <div className="flex items-center gap-2.5 border-t border-line pt-4 text-xs">
+      {session.via === 'firebase' && session.photo ? (
+        <img src={session.photo} alt="" className="h-7 w-7 shrink-0 rounded-full" referrerPolicy="no-referrer" />
+      ) : (
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-panel-2 text-muted">
+          <UserRound className="h-3.5 w-3.5" />
+        </span>
+      )}
+      <span className="min-w-0 flex-1 truncate text-body" title={label}>
+        {label}
+      </span>
+      <button
+        className="rounded-full p-1.5 text-muted transition hover:bg-panel-2 hover:text-white"
+        onClick={() => {
+          navigate('/welcome')
+          void signOut()
+        }}
+        aria-label={session.via === 'firebase' ? 'Sign out' : 'Forget token'}
+        title={session.via === 'firebase' ? 'Sign out' : 'Forget token'}
+      >
+        <LogOut className="h-3.5 w-3.5" />
+      </button>
     </div>
   )
 }

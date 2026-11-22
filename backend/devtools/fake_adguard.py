@@ -98,8 +98,9 @@ def _ag_time(dt: datetime) -> str:
 class Rule:
     raw: str
     allow: bool
-    domain: str
+    domain: str  # "*" matches every name (QuietNet's rescue catch-all `||*^`)
     clients: list[str]
+    exclude: list[str] = field(default_factory=list)  # `$client=~'a'|~'b'`: everyone except these
 
 
 def parse_rule(line: str) -> Rule | None:
@@ -112,10 +113,13 @@ def parse_rule(line: str) -> Rule | None:
         return None
     pattern, _, mods = body[2:].partition("$")
     clients: list[str] = []
+    exclude: list[str] = []
     for m in mods.split(","):
         if m.startswith("client="):
-            clients = [c.strip().strip("'\"") for c in m[len("client="):].split("|")]
-    return Rule(line, allow, pattern.rstrip("^").lower(), clients)
+            for c in m[len("client="):].split("|"):
+                c = c.strip()
+                (exclude if c.startswith("~") else clients).append(c.lstrip("~").strip("'\""))
+    return Rule(line, allow, pattern.rstrip("^").lower(), clients, exclude)
 
 
 @dataclass
@@ -134,9 +138,11 @@ class State:
         q = qname.lower().strip(".")
         hits_block, hits_allow = [], []
         for r in self.parsed():
-            if not (q == r.domain or q.endswith("." + r.domain)):
+            if not (r.domain == "*" or q == r.domain or q.endswith("." + r.domain)):
                 continue
             if r.clients and client not in r.clients:
+                continue
+            if client in r.exclude:
                 continue
             (hits_allow if r.allow else hits_block).append(r.raw)
         if hits_allow:

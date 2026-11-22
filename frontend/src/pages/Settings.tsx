@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, forgetToken, hasSavedToken } from '../api'
-import { Eyebrow, timeAgo } from '../components/ui'
+import { LogIn, LogOut, UserRound } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { api } from '../api'
+import { CREDITS } from '../lib/credits'
+import { Eyebrow, Roll, timeAgo } from '../components/ui'
+import { firebaseEnabled, signOut, useSession } from '../session'
 
 export default function Settings() {
   const qc = useQueryClient()
@@ -16,11 +20,14 @@ export default function Settings() {
     <div className="max-w-5xl">
       <h1 className="page-title">Settings</h1>
 
+      <AccountCard />
+
       <div className="card mt-6 flex items-center gap-4 p-5">
         <div className="flex-1">
           <div className="font-display text-xl">Auto-mode</div>
           <div className="mt-1 text-sm text-muted">
-            Block high-confidence ads, trackers and threats without asking. You get a notification and can undo any time.
+            Block high-confidence ads, trackers and threats without asking, when blocking them won't break anything.
+            The rest wait in Suggestions. You get a notification and can undo any time.
           </div>
         </div>
         <button
@@ -70,18 +77,6 @@ export default function Settings() {
         )}
       </div>
 
-      {hasSavedToken() && (
-        <div className="card mt-6 flex flex-wrap items-center gap-4 p-5">
-          <div className="min-w-0 flex-1">
-            <div className="font-medium">Access token saved in this browser</div>
-            <div className="mt-1 text-sm text-muted">Forget it on a shared computer. You'll need the token again to sign back in.</div>
-          </div>
-          <button className="btn-ghost" onClick={forgetToken}>
-            Forget token
-          </button>
-        </div>
-      )}
-
       <Eyebrow className="mt-10">
         <span id="credits">Built on</span>
       </Eyebrow>
@@ -118,46 +113,65 @@ export default function Settings() {
 }
 
 // The cloud DNS stack in infra/ and the data the engine classifies with (see README, Credits).
-const CREDITS: { name: string; url: string; role: string; license?: string }[] = [
-  {
-    name: 'AdGuard Home',
-    url: 'https://github.com/AdguardTeam/AdGuardHome',
-    role: 'The DNS server on the cloud VM: answers every lookup over DoT and DoH, applies your block rules per device, and keeps the query log QuietNet reads.',
-    license: 'GPL-3.0',
-  },
-  {
-    name: 'Cloudflare 1.1.1.1 and Quad9',
-    url: 'https://www.quad9.net',
-    role: 'Upstream resolvers AdGuard Home asks, over TLS, for lookups that are allowed.',
-  },
-  {
-    name: "Let's Encrypt and Certbot",
-    url: 'https://letsencrypt.org',
-    role: 'The free wildcard certificate that lets each device reach its own encrypted DNS address.',
-    license: 'Certbot: Apache-2.0',
-  },
-  { name: 'Caddy', url: 'https://github.com/caddyserver/caddy', role: 'Optional HTTPS front for DNS-over-HTTPS in the hardened setup.', license: 'Apache-2.0' },
-  {
-    name: 'HaGeZi DNS blocklists',
-    url: 'https://github.com/hagezi/dns-blocklists',
-    role: 'Tracker and smart-TV lists (LG, Samsung, Amazon, Roku) that QuietNet uses to recognise domains.',
-    license: 'GPL-3.0',
-  },
-  {
-    name: 'DuckDuckGo Tracker Radar',
-    url: 'https://github.com/duckduckgo/tracker-radar',
-    role: 'Which company owns a tracking domain and what it collects.',
-    license: 'CC BY-NC-SA 4.0',
-  },
-  { name: 'Inter and Inter Tight', url: 'https://rsms.me/inter/', role: 'Typefaces by Rasmus Andersson.', license: 'SIL OFL 1.1' },
-]
 
 function Row({ label, ok, detail }: { label: string; ok?: boolean; detail?: string | null }) {
   return (
-    <div className="flex items-center gap-3 p-4">
-      <span className={`h-2.5 w-2.5 rounded-full ${ok ? 'bg-guard' : 'bg-warn'}`} />
-      <span className="w-48 shrink-0 font-medium">{label}</span>
-      <span className="min-w-0 flex-1 truncate text-muted">{detail}</span>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 p-4">
+      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${ok ? 'bg-guard' : 'bg-warn'}`} />
+      <span className="min-w-0 font-medium sm:w-48 sm:shrink-0">{label}</span>
+      <span className="min-w-0 basis-full pl-[22px] text-muted sm:flex-1 sm:basis-0 sm:truncate sm:pl-0">{detail}</span>
+    </div>
+  )
+}
+
+/** Who is signed in here, and signing out (on a shared computer). */
+function AccountCard() {
+  const session = useSession()
+  const navigate = useNavigate()
+  const account = useQuery({ queryKey: ['account'], queryFn: api.account })
+  if (session.status !== 'signed-in') return null
+  const firebase = session.via === 'firebase'
+  return (
+    <div className="card mt-6 flex flex-wrap items-center gap-x-4 gap-y-3 p-5" data-testid="account">
+      {firebase && session.photo ? (
+        <img src={session.photo} alt="" className="h-10 w-10 shrink-0 rounded-full" referrerPolicy="no-referrer" />
+      ) : (
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-panel-2 text-muted">
+          <UserRound className="h-5 w-5" strokeWidth={1.75} />
+        </span>
+      )}
+      <div className="min-w-0 flex-1 basis-56">
+        <div className="truncate font-medium">
+          {firebase ? (session.email ?? session.name ?? 'Signed in') : 'Using the server’s access token'}
+        </div>
+        <div className="mt-1 text-sm text-muted">
+          {firebase
+            ? 'This is your home’s account. Only you see its devices, lookups and blocks.'
+            : account.data?.operator
+              ? 'The token opens the server’s first home.' + (firebaseEnabled ? ' Sign in with Google or email to move it into your own account.' : '')
+              : 'Forget it on a shared computer.'}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {!firebase && firebaseEnabled && (
+          <Link to="/login?upgrade=1&next=%2Fsettings" className="btn-primary">
+            <Roll>
+              <LogIn className="h-4 w-4" /> Sign in
+            </Roll>
+          </Link>
+        )}
+        <button
+          className="btn-ghost"
+          onClick={() => {
+            navigate('/welcome')
+            void signOut()
+          }}
+        >
+          <Roll>
+            <LogOut className="h-4 w-4" /> {firebase ? 'Sign out' : 'Forget token'}
+          </Roll>
+        </button>
+      </div>
     </div>
   )
 }

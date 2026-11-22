@@ -4,14 +4,24 @@
     {
       "name": "fake-adguard",
       "runtimeExecutable": "C:\\Projects\\pahra\\backend\\.venv\\Scripts\\python.exe",
-      "runtimeArgs": ["-m", "devtools.fake_adguard", "--port", "3100"],
+      "runtimeArgs": [
+        "-m",
+        "devtools.fake_adguard",
+        "--port",
+        "3100"
+      ],
       "cwd": "C:\\Projects\\pahra\\backend",
       "port": 3100
     },
     {
       "name": "api",
       "runtimeExecutable": "C:\\Projects\\pahra\\backend\\.venv\\Scripts\\uvicorn.exe",
-      "runtimeArgs": ["pahra.main:create_app", "--factory", "--port", "8000"],
+      "runtimeArgs": [
+        "pahra.main:create_app",
+        "--factory",
+        "--port",
+        "8000"
+      ],
       "cwd": "C:\\Projects\\pahra\\backend",
       "env": {
         "ADGUARD_URL": "http://127.0.0.1:3100",
@@ -24,14 +34,24 @@
     {
       "name": "fake-llm",
       "runtimeExecutable": "C:\\Projects\\pahra\\backend\\.venv\\Scripts\\python.exe",
-      "runtimeArgs": ["-m", "devtools.fake_llm", "--port", "3200"],
+      "runtimeArgs": [
+        "-m",
+        "devtools.fake_llm",
+        "--port",
+        "3200"
+      ],
       "cwd": "C:\\Projects\\pahra\\backend",
       "port": 3200
     },
     {
       "name": "api-fake-ai",
       "runtimeExecutable": "C:\\Projects\\pahra\\backend\\.venv\\Scripts\\uvicorn.exe",
-      "runtimeArgs": ["pahra.main:create_app", "--factory", "--port", "8000"],
+      "runtimeArgs": [
+        "pahra.main:create_app",
+        "--factory",
+        "--port",
+        "8000"
+      ],
       "cwd": "C:\\Projects\\pahra\\backend",
       "env": {
         "ADGUARD_URL": "http://127.0.0.1:3100",
@@ -47,9 +67,60 @@
     {
       "name": "dashboard",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "cwd": "C:\\Projects\\pahra\\frontend",
       "port": 5173
+    },
+    {
+      "name": "auth-emulator",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "--yes",
+        "firebase-tools",
+        "emulators:start",
+        "--only",
+        "auth",
+        "--project",
+        "demo-quietnet"
+      ],
+      "cwd": "C:\\Projects\\pahra",
+      "port": 9099
+    },
+    {
+      "name": "api-accounts",
+      "runtimeExecutable": "C:\\Projects\\pahra\\backend\\.venv\\Scripts\\uvicorn.exe",
+      "runtimeArgs": [
+        "pahra.main:create_app",
+        "--factory",
+        "--port",
+        "8000"
+      ],
+      "cwd": "C:\\Projects\\pahra\\backend",
+      "env": {
+        "ADGUARD_URL": "http://127.0.0.1:3100",
+        "OFFLINE_LISTS": "true",
+        "DB_PATH": "pahra-accounts.db",
+        "VM_IP": "203.0.113.10",
+        "LLM_BASE_URL": "http://127.0.0.1:3200/v1",
+        "LLM_API_KEY": "dev",
+        "LLM_MODEL": "fake-vision",
+        "FIREBASE_PROJECT_ID": "demo-quietnet",
+        "FIREBASE_AUTH_EMULATOR_HOST": "127.0.0.1:9099"
+      },
+      "port": 8000
+    },
+    {
+      "name": "dashboard-accounts",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev:emulator"
+      ],
+      "cwd": "frontend",
+      "port": 5174
     }
   ]
 }

@@ -3,6 +3,7 @@ import { Plus, ShieldCheck, Zap } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
+import AdHunt from '../components/AdHunt'
 import SuggestionCard from '../components/SuggestionCard'
 import { DeviceIcon, Empty, FilterChip, Roll, useToast } from '../components/ui'
 
@@ -83,6 +84,10 @@ export default function Suggestions() {
             <DeviceIcon type={d.type} className="h-3.5 w-3.5" /> {d.name}
           </FilterChip>
         ))}
+      </div>
+
+      <div className="mt-5">
+        <AdHunt deviceId={deviceId} deviceName={devices.data?.find((d) => d.id === deviceId)?.name} />
       </div>
 
       <div className="mt-5 grid gap-4 xl:grid-cols-2 min-[1800px]:grid-cols-3">

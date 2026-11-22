@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -15,6 +16,12 @@ class Settings(BaseSettings):
     adguard_pass: str = "change-me"
     # Restrict who may use the resolver to linked device ClientIDs / IPs (SPEC §8).
     adguard_lock_access: bool = True
+    # With the lock on, what happens to lookups from addresses QuietNet doesn't know (e.g. a home whose public IP
+    # just changed): "drop" them silently, or "rescue": answer only Dynamic DNS, time and QuietNet's own names, so
+    # the router can report its new address, and block the rest at once instead of letting lookups hang.
+    adguard_unknown_clients: Literal["drop", "rescue"] = "rescue"
+    # How often to re-resolve each home's Dynamic DNS hostname (pahra.home_address)
+    ddns_check_s: int = 60
 
     # Public DNS naming: DoT hostname is <client_id>.<dns_hostname>, DoH is https://<dns_hostname>/dns-query/<client_id>
     dns_hostname: str = "dns.pahra.app"
@@ -40,8 +47,13 @@ class Settings(BaseSettings):
     event_retention_days: int = 7
     query_log_hours: int = 24  # individual lookups kept for the live view and report charts
 
-    # Single-user hackathon auth
+    # The operator's token: scripts, and dashboards from before sign-in. It means the first ("seed") account.
     api_token: str = "dev-token"
+    # Firebase Authentication: with a project id, people sign in (Google or email link) and each gets their own
+    # account that sees only its own devices. Empty = token only (single home).
+    firebase_project_id: str = ""
+    # Local development only: accept unsigned tokens from the Firebase Auth emulator (e.g. 127.0.0.1:9099).
+    firebase_auth_emulator_host: str = ""
     seed_user_email: str = "owner@pahra.local"
 
     # Companion MCP server (spawned over stdio). Empty = disabled.

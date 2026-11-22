@@ -1,21 +1,29 @@
+import { firebaseEnabled, firebaseToken, firebaseTokenNow } from './lib/firebase'
+
 // Empty in dev (Vite proxies /api). A hosted build (Firebase) sets VITE_API_BASE to the public backend URL.
 const API_BASE: string = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
 export const apiUrl = (path: string) => `${API_BASE}/api${path}`
 
-// ---------- access token ----------
-// A hosted dashboard must not carry the token in its JavaScript (anyone could read it), so the owner
-// pastes it once per browser and it stays in localStorage. Local dev falls back to the backend's default.
+// ---------- who is asking ----------
+// People sign in with Firebase (lib/firebase.ts) and the server shows each sign-in only its own home. The server's
+// access token still works (scripts, and the browser that used it before sign-in existed): pasted once per browser,
+// it stays in localStorage. A hosted dashboard never carries it in its JavaScript. Local dev without Firebase
+// falls back to the backend's default token.
 const TOKEN_KEY = 'quietnet.token'
-const BUILD_TOKEN: string = import.meta.env.VITE_API_TOKEN || (import.meta.env.DEV ? 'dev-token' : '')
-/** Fired when the backend rejects the token, so the app can ask for it again. */
+const BUILD_TOKEN: string = firebaseEnabled ? '' : import.meta.env.VITE_API_TOKEN || (import.meta.env.DEV ? 'dev-token' : '')
+/** Fired when the saved access token changes, so the app can sign in or out. */
 export const AUTH_EVENT = 'quietnet:auth'
+/** Fired when the server refuses this browser's sign-in or token (401). */
+export const REJECTED_EVENT = 'quietnet:rejected'
 
+/** The server access token saved in this browser (or the dev default). */
 export function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) || BUILD_TOKEN
 }
 export const hasSavedToken = () => !!localStorage.getItem(TOKEN_KEY)
 export function setToken(token: string) {
   localStorage.setItem(TOKEN_KEY, token)
+  window.dispatchEvent(new Event(AUTH_EVENT))
 }
 export function forgetToken() {
   localStorage.removeItem(TOKEN_KEY)
@@ -29,6 +37,11 @@ export async function checkToken(token: string): Promise<boolean> {
   throw new ApiError(r.status, `QuietNet's server answered HTTP ${r.status}`)
 }
 
+/** What this browser sends as its Bearer: the Firebase sign-in when there is one, else the access token. */
+export async function bearer(forceRefresh = false): Promise<string> {
+  return (await firebaseToken(forceRefresh)) || getToken()
+}
+
 export class ApiError extends Error {
   status: number
   detail: unknown
@@ -39,21 +52,24 @@ export class ApiError extends Error {
   }
 }
 
-async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function req<T>(method: string, path: string, body?: unknown, retried = false): Promise<T> {
   const r = await fetch(apiUrl(path), {
     method,
-    headers: { Authorization: `Bearer ${getToken()}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+    headers: { Authorization: `Bearer ${await bearer(retried)}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
+  // A Firebase ID token can expire mid-request: try once more with a fresh one.
+  if (r.status === 401 && !retried && firebaseTokenNow()) return req<T>(method, path, body, true)
   if (r.status === 204) return undefined as T
   const data = await r.json().catch(() => null)
-  if (r.status === 401) forgetToken()
+  if (r.status === 401) window.dispatchEvent(new Event(REJECTED_EVENT))
   if (!r.ok) throw new ApiError(r.status, data?.detail ?? data)
   return data as T
 }
 
 /** For EventSource and plain links, which can't send an Authorization header. */
-export const withToken = (path: string) => `${apiUrl(path)}${path.includes('?') ? '&' : '?'}token=${encodeURIComponent(getToken())}`
+export const withToken = (path: string) =>
+  `${apiUrl(path)}${path.includes('?') ? '&' : '?'}token=${encodeURIComponent(firebaseTokenNow() || getToken())}`
 
 // ---------- types ----------
 /** What the AI read on a pasted screenshot, with QuietNet's values already filled in */
@@ -67,6 +83,17 @@ export interface ScreenAnswer {
   warning: string
   next: string
   done: boolean
+}
+/** "I've done it": whether QuietNet sees this device's lookups arriving */
+export interface SetupCheck {
+  ok: boolean
+  lookups: number
+  seen_at: string | null
+  encrypted: boolean | null
+  message: string
+  tips: string[]
+  /** Plain DNS on a router not linked to the address this page comes from: offer to link it */
+  link_ip: string | null
 }
 /** An earlier answer, sent back so the AI carries on from it */
 export interface ScreenTurn {
@@ -94,6 +121,9 @@ export interface Device {
   brand: string | null
   setup_method: string
   linked_ip: string | null
+  /** router's Dynamic DNS name QuietNet follows to keep linked_ip current */
+  ddns_host: string | null
+  ddns_status: { host: string; checked_at: string; ip: string | null; error: string | null } | null
   last_seen: string | null
   online: boolean
   risk_score: number
@@ -115,6 +145,31 @@ export interface CardDevice {
   beacon: boolean
   avg_interval_s: number | null
   quarantined: boolean
+}
+
+/** "Saw an ad?": a name the AI thinks served the ads (see backend pahra.ad_hunt). */
+export interface AdCandidate {
+  name: string
+  owner: string | null
+  role: 'ad server' | 'ad decisions' | 'ad images' | 'ad tracking' | 'ad network'
+  why: string
+  confidence: 'high' | 'medium' | 'low'
+  break_risk: 'low' | 'medium' | 'high'
+  break_note: string
+  must_allow: boolean
+  lookups: number
+  last_seen: string
+  selected: boolean
+}
+
+export interface AdHunt {
+  where: string
+  minutes: number
+  looked_at: number
+  summary: string
+  candidates: AdCandidate[]
+  in_stream: boolean
+  note: string
 }
 
 export interface Suggestion {
@@ -344,8 +399,21 @@ export interface Settings {
 }
 
 // ---------- calls ----------
+/** Who this browser is signed in as, on the server's side */
+export interface Account {
+  signed_in_with: 'firebase' | 'token'
+  email: string | null
+  /** This is the server's first account (the one its access token opens) */
+  operator: boolean
+  /** The access token's account hasn't been moved onto a sign-in yet */
+  can_claim: boolean
+}
+
 export const api = {
   health: () => req<Health>('GET', '/health'),
+  account: () => req<Account>('GET', '/account'),
+  /** Move the devices set up with the server's access token into the signed-in account (once). */
+  claim: (token: string) => req<{ ok: true }>('POST', '/account/claim', { token }),
   devices: () => req<Device[]>('GET', '/devices'),
   device: (id: string) => req<Device>('GET', `/devices/${id}`),
   createDevice: (b: { name: string; type: DeviceType; brand?: string | null; setup_method?: string }) =>
@@ -380,6 +448,8 @@ export const api = {
   ispGuide: (name: string) => req<IspGuide>('POST', '/providers/guide', { kind: 'isp', name }),
   routerGuide: (name: string) => req<RouterGuide>('POST', '/providers/guide', { kind: 'router', name }),
   screenshotHelp: (b: ScreenAsk) => req<ScreenAnswer>('POST', '/setup/screenshot', b),
+  checkDevice: (id: string) => req<SetupCheck>('POST', `/devices/${id}/check`),
+  adHunt: (b: { where: string; minutes: number; device_id?: string | null; note?: string }) => req<AdHunt>('POST', '/ads/hunt', b),
   cgnat: (router_wan_ip: string) =>
     req<{ public_ip: string | null; cgnat: boolean | null; advice: string }>('POST', '/network/cgnat', { router_wan_ip }),
 }

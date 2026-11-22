@@ -123,18 +123,30 @@ def setup_guide(s: Settings, device: dict, forwarder_ip: str | None = None) -> d
             "To stop: set the TV's DNS back to automatic, then delete the TV here.",
         ]
     else:  # router / ipv4_demo / ipv6: plain DNS, recognised by the home's public IP
-        linked = device.get("linked_ip")
+        linked, ddns = device.get("linked_ip"), device.get("ddns_host")
         steps = [
             "Open your router's admin page (the address is on its sticker, often http://192.168.1.1 or http://192.168.0.1).",
-            f"Find the DNS settings (often under WAN, Internet or DHCP) and set Primary DNS to {vm}.",
+            f"Find the DNS settings (often under WAN, Internet or DHCP) and set Primary DNS to {vm}. Change nothing "
+            "else on that page: Service Name, MTU and the login fields belong to your internet provider.",
             "Leave Secondary DNS empty, or set it to the same address. Any other server there lets ads slip through.",
-            "Save and restart the router. Every device on your WiFi, including smart TVs, is now covered.",
+            "Save. Every device on your WiFi, including smart TVs, is now covered. Saving the Internet page reconnects "
+            "the router, and your provider may give your home a new internet address when it does.",
             (
-                f"QuietNet recognises your home by its public IP {linked}. If your provider changes it, "
-                "open Setup again from home to update it."
+                f"QuietNet follows your home's address through {ddns}, so a new one from your provider is picked up "
+                "within a minute or two."
+                if ddns
+                else "So QuietNet keeps up when that address changes: turn on Dynamic DNS in the router (often "
+                "Advanced → Network → Dynamic DNS; TP-Link DDNS or No-IP are free), then enter its hostname under "
+                "\"Follow my home's address\" here."
+            ),
+            (
+                f"QuietNet recognises your home by its public IP {linked}."
                 if linked
                 else "QuietNet recognises your home by its public IP: link it from Setup while you're on your home WiFi."
             ),
+            "If the internet ever stops: open quietnet.in on your home WiFi (it still opens) and press \"I've done it, "
+            "check\" to link the new address. To undo QuietNet, untick \"Use the following DNS addresses\" (or set DNS "
+            "back to automatic) and save.",
         ]
     return {"method": method, "values": values, "steps": steps}
 

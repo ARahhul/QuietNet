@@ -22,12 +22,16 @@ PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
 PIC = "data:image/png;base64," + base64.b64encode(PNG).decode()
 
 
-def _model(answer: dict | None, calls: list) -> httpx.MockTransport:
+def _model(answer: dict | list | None, calls: list) -> httpx.MockTransport:
+    """The model answers `answer` every time, or a list of answers in turn (the last one repeating)."""
+    answers = answer if isinstance(answer, list) else [answer]
+
     def handler(req: httpx.Request) -> httpx.Response:
         calls.append(json.loads(req.content))
-        if answer is None:
+        now = answers[min(len(calls), len(answers)) - 1]
+        if now is None:
             return httpx.Response(500, text="model down")
-        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(answer)}}]})
+        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(now)}}]})
 
     return httpx.MockTransport(handler)
 
@@ -125,14 +129,96 @@ def test_hostname_is_given_once_and_written_as_a_placeholder(make):
     assert "DNS-over-TLS" in text and "Earlier in this conversation" in text and "ASUS login page" in text
 
 
-def test_before_the_router_is_added(make):
-    answer = {"screen": "JioFiber login page", "steps": ["Log in, then open Network → LAN.", "Enter <TLS_HOSTNAME>."]}
+def test_before_the_router_is_added_no_dns_values(make):
+    """AdGuard only answers homes that are added: changing DNS first would cut the home off."""
+    answer = {
+        "screen": "JioFiber LAN page",
+        "steps": ["Open Network → LAN.", "Enter <DNS_SERVER> in Primary DNS."],
+        "fill": [{"field": "Primary DNS", "value": "<DNS_SERVER>"}],
+    }
     c, calls, _ = make(answer)
     got = c.post("/api/setup/screenshot", headers=H, json={"image": PIC, "isp": "Jio", "router": ""}).json()
-    assert got["steps"][1] == "Enter the TLS hostname QuietNet shows once you add the router."
+    assert got["steps"][1] == "Enter the DNS server QuietNet shows once you add the router in Primary DNS."
+    assert got["fill"] == []  # nothing real to copy yet
     text = _texts(calls[0])
-    assert "haven't added the router" in text and "Their internet provider: Jio." in text
-    assert f"<DNS_SERVER> = {VM} (QuietNet's DNS server address)" in text
+    assert "haven't added the router" in text and "cut their internet off" in text and "Set up" in text
+    assert "Their internet provider: Jio." in text and "none yet" in text and VM not in text
+
+
+# What a weak model said on TP-Link's DHCP page, which does have the DNS boxes (seen live, 2026-11-22)
+WRONG_PAGE = {
+    "screen": "TP-Link's DHCP Server settings page",
+    "dns_boxes": ["Primary DNS", "Secondary DNS"],
+    "reply": "This page is for DHCP settings, not DNS.",
+    "on_track": False,
+    "steps": ['Click "Advanced" in the top left.', 'Click "-LAN Settings" in the left menu.'],
+    "fill": [],
+    "next": "the LAN Settings page",
+}
+
+
+def test_a_page_with_dns_boxes_is_never_the_wrong_page(make):
+    """It saw Primary DNS on the page yet said "go elsewhere": asked once more, and it answers for this page."""
+    right = {
+        "screen": "TP-Link's DHCP Server settings page",
+        "dns_boxes": ["Primary DNS", "Secondary DNS"],
+        "reply": "Here: Primary DNS on this page.",
+        "on_track": True,
+        "steps": ["Type <DNS_SERVER> in Primary DNS.", "Leave Secondary DNS empty.", 'Click "Save".'],
+        "fill": [{"field": "Primary DNS", "value": "<DNS_SERVER>"}],
+    }
+    c, calls, _ = make([WRONG_PAGE, right])
+    dev = _device(c)
+    got = c.post("/api/setup/screenshot", headers=H, json={"image": PIC, "device_id": dev["id"], "question": "what do I do here?"}).json()
+    assert len(calls) == 2
+    assert "contradicted itself" not in _texts(calls[0])
+    assert "you saw DNS boxes (Primary DNS, Secondary DNS)" in _texts(calls[1])
+    assert got["on_track"] is True and got["steps"][0] == f"Type {VM} in Primary DNS." and got["fill"] == [{"field": "Primary DNS", "value": VM}]
+
+
+def test_if_it_still_says_wrong_page_it_isnt_sent_away(make):
+    c, calls, _ = make(WRONG_PAGE)  # the same answer twice
+    got = c.post("/api/setup/screenshot", headers=H, json={"image": PIC, "isp": "ACT", "router": "TP-Link"}).json()
+    assert len(calls) == 2
+    assert got["on_track"] is True and got["next"] == ""
+    assert got["reply"].startswith("This is the right page: Primary DNS and Secondary DNS are here.")
+    assert "Set up" in got["reply"]  # the router isn't added yet: values first
+    assert got["steps"][1].startswith('In QuietNet, click "Set up …"')
+
+
+def test_on_the_dns_page_before_the_router_is_added_nothing_changes_yet(make):
+    """Seen live: it said to tick "Use the following DNS addresses" and re-type the gateway before the router was added."""
+    answer = {
+        "screen": "TP-Link's Internet settings page",
+        "dns_boxes": ["Primary DNS", "Secondary DNS"],
+        "reply": "No, leave the Default Gateway as it is.",
+        "on_track": True,
+        "steps": ["Tick 'Use the following DNS addresses'", "Type 192.168.0.1 in Default Gateway", "Click 'Save'"],
+        "fill": [{"field": "Use the following DNS addresses", "value": "tick"}, {"field": "Default Gateway", "value": "192.168.0.1"}],
+        "warning": "Changing this now will cut off your internet.",
+        "next": "the page after Save",
+    }
+    c, calls, _ = make(answer)
+    asked = c.post("/api/setup/screenshot", headers=H, json={"image": PIC, "isp": "ACT", "router": "TP-Link", "question": "shld i change the default gateway ?"}).json()
+    assert len(calls) == 1
+    # their question still gets its answer, then what comes first
+    assert asked["reply"] == 'No, leave the Default Gateway as it is. Before changing anything here, click QuietNet\'s "Set up …" button.'
+    assert asked["fill"] == [] and asked["warning"] == "" and asked["next"] == ""
+    assert asked["steps"] == [
+        "Keep this page open and don't change anything on it yet.",
+        'In QuietNet, click "Set up …" under the guide: it adds your router and shows what to type in Primary DNS.',
+        "Come back to this page and fill it in as QuietNet shows.",
+    ]
+    plain = c.post("/api/setup/screenshot", headers=H, json={"image": PIC, "isp": "ACT", "router": "TP-Link"}).json()
+    assert plain["reply"].startswith("This is the right page: Primary DNS and Secondary DNS are here. Keep it open")
+
+
+def test_menu_bullets_are_dropped_and_a_right_answer_is_asked_once(make):
+    answer = {"screen": "TP-Link's Advanced page", "dns_boxes": [], "on_track": False, "steps": ['Click "-LAN Settings" in the left menu.', 'Click "• DHCP Server".']}
+    c, calls, _ = make(answer)
+    got = c.post("/api/setup/screenshot", headers=H, json={"image": PIC, "isp": "ACT", "router": "TP-Link"}).json()
+    assert len(calls) == 1 and got["on_track"] is False
+    assert got["steps"] == ['Click "LAN Settings" in the left menu.', 'Click "DHCP Server".']
 
 
 def test_the_trace_never_holds_the_picture(make, rec):  # noqa: F811

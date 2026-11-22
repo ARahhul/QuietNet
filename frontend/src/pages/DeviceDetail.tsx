@@ -2,8 +2,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Radio, Trash2 } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
+import DoneCheck from '../components/DoneCheck'
+import HomeAddress from '../components/HomeAddress'
 import SetupSteps from '../components/SetupSteps'
 import { CategoryChip, DeviceIcon, Eyebrow, RiskBar, Roll, timeAgo, useToast } from '../components/ui'
+
+/** Plain DNS: recognised by the home's public IP, so it needs that address kept current. */
+const PLAIN = ['ipv4_demo', 'ipv6']
 
 export default function DeviceDetail() {
   const { id = '' } = useParams()
@@ -99,6 +104,12 @@ export default function DeviceDetail() {
           <div className="card mt-4 max-w-3xl p-5">
             <SetupSteps deviceId={d.id} guide={setup.data} brand={d.brand} />
           </div>
+          {PLAIN.includes(d.setup_method) && (
+            <div className="mt-4 grid max-w-3xl gap-4">
+              <HomeAddress device={d} />
+              <DoneCheck deviceId={d.id} />
+            </div>
+          )}
         </>
       )}
 

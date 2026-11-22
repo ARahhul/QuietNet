@@ -11,6 +11,7 @@ Prompts come from pahra.prompts (via Langfuse when configured) and every model c
 (pahra.tracing).
 """
 
+import asyncio
 import base64
 import json
 import logging
@@ -26,6 +27,17 @@ from .clues import Clues
 from .confidence import UNCONFIRMED_TEXT
 
 log = logging.getLogger("pahra.explainer")
+
+# Answers that mean "busy, try again shortly" rather than "this request is wrong"
+BUSY = {429, 502, 503, 504}
+
+
+def _retry_after(r, default: float) -> float:
+    """The gateway's Retry-After (seconds), kept short: a person is waiting on the answer."""
+    try:
+        return min(max(float(r.headers.get("retry-after", default)), 0.0), 5.0)
+    except ValueError:
+        return default
 
 # explained_by values that mean "an AI model wrote this text" (the UI shows "explained by AI")
 AI_LABELS = ("gemini", "ai")
@@ -127,6 +139,7 @@ class Explainer:
         """With base_url, api_key belongs to that OpenAI-compatible endpoint; without, it's a Gemini key."""
         self.model = model
         self.batch_size = batch_size
+        self.retry_delay = 1.5  # seconds before the one retry when the AI is busy
         self.client = None
         self.provider: str | None = None
         self.last_error: str | None = None
@@ -208,6 +221,11 @@ class Explainer:
             messages = [*messages[:last], {"role": "user", "content": parts}, *messages[last + 1 :]]
         body = {"model": self.model, "messages": messages, "temperature": p.temperature, "response_format": {"type": "json_object"}}
         r = await self.client.post("/chat/completions", json=body)  # type: ignore[union-attr]
+        if r.status_code in BUSY:
+            # The gateway or its model is busy (rate limit, overload): one more try after a short pause.
+            log.info("AI answered HTTP %s, trying once more", r.status_code)
+            await asyncio.sleep(_retry_after(r, self.retry_delay))
+            r = await self.client.post("/chat/completions", json=body)  # type: ignore[union-attr]
         if r.status_code == 400:
             # Some models/gateways reject JSON mode or a custom temperature: ask plainly instead.
             r = await self.client.post("/chat/completions", json={"model": self.model, "messages": messages})  # type: ignore[union-attr]

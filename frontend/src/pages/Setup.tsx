@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type Device, type DeviceType, type SetupGuide } from '../api'
 import AssistantPanel from '../components/assistant/AssistantPanel'
+import DoneCheck from '../components/DoneCheck'
+import HomeAddress from '../components/HomeAddress'
 import RouterWizard, { type RouterPlan } from '../components/RouterWizard'
 import ScreenshotHelp from '../components/ScreenshotHelp'
 import SetupSteps from '../components/SetupSteps'
@@ -187,6 +189,8 @@ export default function Setup() {
             <SetupSteps deviceId={created.device.id} guide={created.setup} brand={created.device.brand} type={created.device.type} />
           </div>
           {aiReady && <ScreenshotHelp deviceId={created.device.id} />}
+          <DoneCheck deviceId={created.device.id} aiHelp={aiReady} />
+          {created.setup.method === 'ipv4_demo' && <HomeAddress device={live.data ?? created.device} />}
           {created.setup.method === 'ipv4_demo' && !created.device.linked_ip ? <CgnatCheck /> : null}
           <button
             className="btn-ghost w-fit"
