@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Activity, Ban, Bell, ChartColumn, Cpu, LogOut, Plus, Settings, ShieldCheck, UserRound } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { signOut, takeMovedHome, useSession } from '../session'
@@ -21,6 +21,15 @@ export default function Layout() {
   const alerts = useQuery({ queryKey: ['alerts'], queryFn: api.alerts, refetchInterval: 15000 })
   const unread = alerts.data?.filter((a) => !a.read).length ?? 0
   const ok = health.data?.adguard.ok
+  const devices = useQuery({ queryKey: ['devices'], queryFn: api.devices, refetchInterval: 15000 })
+  // "Protected" only once one of this home's devices is really sending lookups (not just "the server is up")
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 30000)
+    return () => clearInterval(t)
+  }, [])
+  const live = (devices.data ?? []).some((d) => d.last_seen && now - Date.parse(d.last_seen) < LIVE_MS)
+  const status: Status = !ok ? 'offline' : live ? 'protected' : 'waiting'
   const toast = useToast()
 
   useEffect(() => {
@@ -60,7 +69,7 @@ export default function Layout() {
           <AccountRow />
           <div className="grid gap-1.5 text-xs text-muted">
             <div className="flex items-center">
-              <StatusDot ok={ok} />
+              <StatusDot status={ok ? 'protected' : 'offline'} />
               {ok ? 'Gateway online' : health.isLoading ? 'Checking…' : 'Gateway unreachable'}
             </div>
             <Link to="/settings#credits" className="text-[11px] hover:text-white">
@@ -74,10 +83,14 @@ export default function Layout() {
         <header className="flex items-center justify-between border-b border-line px-4 py-3 md:hidden">
           <Brand />
           <div className="flex items-center gap-3">
-            <span className="flex items-center text-xs text-muted">
-              <StatusDot ok={ok} />
-              {ok ? 'Protected' : 'Offline'}
-            </span>
+            <Link
+              to={status === 'waiting' ? '/setup' : '/devices'}
+              className="flex items-center text-xs text-muted"
+              title={STATUS_HINT[status]}
+            >
+              <StatusDot status={status} />
+              {STATUS_LABEL[status]}
+            </Link>
             <NavLink
               to="/settings"
               aria-label="Settings"
@@ -158,6 +171,16 @@ export function Brand() {
   )
 }
 
-function StatusDot({ ok }: { ok?: boolean }) {
-  return <span className={`mr-1.5 inline-block h-2 w-2 shrink-0 rounded-full ${ok ? 'bg-guard' : 'bg-danger'}`} />
+type Status = 'protected' | 'waiting' | 'offline'
+const LIVE_MS = 10 * 60 * 1000 // a lookup this recent counts as "protected"
+const STATUS_LABEL: Record<Status, string> = { protected: 'Protected', waiting: 'Not connected', offline: 'Offline' }
+const STATUS_HINT: Record<Status, string> = {
+  protected: 'A device of yours sent lookups through QuietNet in the last 10 minutes.',
+  waiting: 'QuietNet is up, but none of your devices has sent a lookup in the last 10 minutes.',
+  offline: 'QuietNet can’t be reached right now.',
+}
+const DOT: Record<Status, string> = { protected: 'bg-guard', waiting: 'bg-warn', offline: 'bg-danger' }
+
+function StatusDot({ status }: { status: Status }) {
+  return <span className={`mr-1.5 inline-block h-2 w-2 shrink-0 rounded-full ${DOT[status]}`} />
 }

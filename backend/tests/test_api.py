@@ -120,6 +120,10 @@ def test_mobileconfig(api):
     assert d["device"]["setup_method"] == "doh"
     r = api.get(f"/api/devices/{d['device']['id']}/profile.mobileconfig", params={"token": "dev-token"})
     assert r.status_code == 200 and "https://dns.pahra.app/dns-query/rahhul-iphone" in r.text
+    # What iOS shows: QuietNet's name, never the old project name (the test server's DNS host aside)
+    assert 'filename="quietnet-rahhul-iphone.mobileconfig"' in r.headers["content-disposition"]
+    assert "<string>QuietNet</string>" in r.text and "in.quietnet.profile." in r.text
+    assert "pahra" not in r.text.replace("dns.pahra.app", "")
 
 
 def test_health(api):

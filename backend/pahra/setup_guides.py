@@ -168,15 +168,16 @@ def mobileconfig(s: Settings, device: dict) -> str:
         <key>ServerURL</key><string>{url}</string>
       </dict>
       <key>PayloadDisplayName</key><string>{name}</string>
-      <key>PayloadIdentifier</key><string>app.pahra.dns.{pid}</string>
+      <key>PayloadIdentifier</key><string>in.quietnet.dns.{pid}</string>
       <key>PayloadType</key><string>com.apple.dnsSettings.managed</string>
       <key>PayloadUUID</key><string>{pid}</string>
       <key>PayloadVersion</key><integer>1</integer>
     </dict>
   </array>
   <key>PayloadDescription</key><string>Routes DNS through QuietNet to block ads and trackers.</string>
+  <key>PayloadOrganization</key><string>QuietNet</string>
   <key>PayloadDisplayName</key><string>{name}</string>
-  <key>PayloadIdentifier</key><string>app.pahra.profile.{cid}</string>
+  <key>PayloadIdentifier</key><string>in.quietnet.profile.{cid}</string>
   <key>PayloadRemovalDisallowed</key><false/>
   <key>PayloadType</key><string>Configuration</string>
   <key>PayloadUUID</key><string>{cid}</string>

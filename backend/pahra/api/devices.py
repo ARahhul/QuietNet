@@ -189,7 +189,7 @@ async def device_profile(device_id: str, e: Engine = Depends(engine)):
     return Response(
         mobileconfig(e.settings, dev),
         media_type="application/x-apple-aspen-config",
-        headers={"Content-Disposition": f'attachment; filename="pahra-{dev["client_id"]}.mobileconfig"'},
+        headers={"Content-Disposition": f'attachment; filename="quietnet-{dev["client_id"]}.mobileconfig"'},
     )
 
 
