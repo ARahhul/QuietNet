@@ -132,6 +132,7 @@ export function signInProblem(e: unknown): string | null {
       return 'That sign-in link has expired or was already used. Send yourself a new one.'
     case 'auth/unauthorized-domain':
     case 'auth/operation-not-allowed':
+    case 'auth/configuration-not-found': // Authentication not started in the Firebase project yet
       return 'Sign-in isn’t switched on for this website yet. The QuietNet owner needs to enable it in Firebase.'
     case 'auth/network-request-failed':
       return 'Can’t reach Google. Check your connection and try again.'
