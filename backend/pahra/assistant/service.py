@@ -46,8 +46,8 @@ class AssistantService:
                 s.task.cancel()
         await self.companion.stop()
 
-    def create(self, description: str) -> AssistantSession:
-        s = AssistantSession(self.engine, self.companion, description)
+    def create(self, description: str, user_id: str | None = None) -> AssistantSession:
+        s = AssistantSession(self.engine, self.companion, description, user_id or self.engine.user_id)
         self.sessions[s.id] = s
         for old in list(self.sessions)[:-MAX_SESSIONS]:
             self.sessions.pop(old, None)
@@ -58,7 +58,7 @@ class AssistantService:
         try:
             if self.genai is not None:
                 try:
-                    await AgentRunner(s, self.genai, self.engine.settings.gemini_model).run()
+                    await AgentRunner(s, self.genai, self.engine.settings.gemini_model, getattr(self.engine, "tracing", None)).run()
                 except (Cancelled, asyncio.CancelledError):
                     raise
                 except Exception as e:  # LLM outage / quota -> deterministic playbook

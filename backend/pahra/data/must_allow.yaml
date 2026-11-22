@@ -1,6 +1,14 @@
 # Domains that are never auto-blocked or quarantined (SPEC §4.3).
 # Blocking them manually shows a red warning. Entries match the domain and all subdomains.
 all:
+  # Akamai's DNS and edge network: Microsoft sign-in, Apple and many big sites resolve through these
+  # (blocking the name also blocks every site whose lookup passes through it)
+  - akadns.net
+  - akadns6.net
+  - akamaiedge.net
+  - akamai.net
+  - edgekey.net
+  - edgesuite.net
   # time servers
   - pool.ntp.org
   - time.android.com

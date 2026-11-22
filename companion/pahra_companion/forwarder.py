@@ -1,14 +1,14 @@
 """LAN DNS forwarder ("laptop relay") for TVs that only take a plain IPv4 DNS server.
 
-LG webOS and Samsung Tizen TVs cannot do DoT/DoH, and behind CGNAT Pahra cannot tell a
+LG webOS and Samsung Tizen TVs cannot do DoT/DoH, and behind CGNAT QuietNet cannot tell a
 home's plain-DNS traffic apart. The relay fixes both. It listens on this laptop's LAN IP,
 UDP and TCP port 53. It looks up the query's source IP in a {tv_ip: client_id} map and
 forwards the raw query over DoH (RFC 8484 POST) to https://<dns_hostname>/dns-query/<client_id>.
-That way Pahra (AdGuard Home) sees each TV under its own ClientID.
+That way QuietNet (AdGuard Home) sees each TV under its own ClientID.
 
 Rules:
   * Only mapped source IPs are answered. Everything else gets REFUSED and is counted.
-  * No caching: Pahra must see every query.
+  * No caching: QuietNet must see every query.
   * The upstream query is sent with id 0 (RFC 8484 §4.1); the original id is restored in the reply.
   * Any upstream failure (timeout, HTTP error, bad body) gives SERVFAIL.
   * UDP replies larger than the client accepts are cut to a TC=1 header so the client retries over TCP.
@@ -65,9 +65,9 @@ def firewall_hint(port: int) -> str:
     return (
         f"Windows Firewall must allow inbound UDP and TCP {port} on the Private profile, and the home "
         "network must be set to Private. Run once in an administrator PowerShell: "
-        f'New-NetFirewallRule -DisplayName "Pahra DNS relay (UDP {port})" -Direction Inbound -Protocol UDP '
+        f'New-NetFirewallRule -DisplayName "QuietNet DNS relay (UDP {port})" -Direction Inbound -Protocol UDP '
         f"-LocalPort {port} -Action Allow -Profile Private; "
-        f'New-NetFirewallRule -DisplayName "Pahra DNS relay (TCP {port})" -Direction Inbound -Protocol TCP '
+        f'New-NetFirewallRule -DisplayName "QuietNet DNS relay (TCP {port})" -Direction Inbound -Protocol TCP '
         f"-LocalPort {port} -Action Allow -Profile Private"
     )
 

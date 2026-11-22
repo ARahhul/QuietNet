@@ -1,24 +1,29 @@
-import { Check, Copy, Laptop, Monitor, Router, Smartphone, Tv } from 'lucide-react'
+import { Check, Copy, Laptop, Monitor, Router, Shield, Smartphone, Tv } from 'lucide-react'
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
 import type { Category, DeviceType } from '../api'
 
-const CAT: Record<Category, { label: string; cls: string }> = {
-  malware: { label: 'Threat', cls: 'bg-danger/15 text-danger' },
-  tracking: { label: 'Tracker', cls: 'bg-warn/15 text-warn' },
-  telemetry: { label: 'Telemetry', cls: 'bg-orange-400/15 text-orange-300' },
-  ads: { label: 'Ads', cls: 'bg-accent/15 text-accent' },
-  needed: { label: 'Needed', cls: 'bg-guard/15 text-guard' },
-  unknown: { label: 'Unknown', cls: 'bg-slate-500/20 text-slate-300' },
+const CAT: Record<Category, { label: string; dot: string }> = {
+  malware: { label: 'Threat', dot: 'bg-danger' },
+  tracking: { label: 'Tracker', dot: 'bg-warn' },
+  telemetry: { label: 'Telemetry', dot: 'bg-orange' },
+  ads: { label: 'Ads', dot: 'bg-violet' },
+  needed: { label: 'Needed', dot: 'bg-guard' },
+  unknown: { label: 'Unknown', dot: 'bg-muted' },
 }
 
 export function CategoryChip({ category, acr }: { category: Category; acr?: boolean }) {
   const c = CAT[category] ?? CAT.unknown
-  return <span className={`chip ${c.cls}`}>{acr ? 'Watches your screen' : c.label}</span>
+  return (
+    <span className={`chip ${category === 'malware' ? 'bg-danger/15 text-danger' : 'bg-panel-2 text-white'}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} />
+      {acr ? 'Watches your screen' : c.label}
+    </span>
+  )
 }
 
 export function ConfidenceChip({ level }: { level: 'high' | 'medium' | 'low' }) {
   const cls = level === 'high' ? 'text-guard' : level === 'medium' ? 'text-warn' : 'text-muted'
-  return <span className={`chip bg-panel-2 ${cls}`}>{level} confidence</span>
+  return <span className={`chip border border-line ${cls}`}>{level} confidence</span>
 }
 
 export function RiskBar({ score }: { score: number }) {
@@ -43,10 +48,10 @@ export function CopyField({ label, value, mono = true }: { label?: string; value
   return (
     <div>
       {label && <div className="mb-1 text-xs text-muted">{label}</div>}
-      <div className="flex items-center gap-2 rounded-xl border border-line bg-panel-2 px-3 py-2">
+      <div className="flex items-center gap-2 rounded-md border border-line bg-ink px-3 py-2">
         <span className={`flex-1 break-all text-sm ${mono ? 'font-mono' : ''}`}>{value}</span>
         <button
-          className="rounded-lg p-1.5 text-muted hover:bg-panel hover:text-slate-100"
+          className="rounded-full p-1.5 text-muted transition hover:bg-panel-2 hover:text-white motion-safe:active:scale-90"
           onClick={() => {
             navigator.clipboard?.writeText(value)
             setDone(true)
@@ -72,11 +77,39 @@ export function timeAgo(iso: string | null): string {
 
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="card p-8 text-center">
-      <div className="font-semibold">{title}</div>
+    <div className="card col-span-full p-8 text-center">
+      <div className="font-display text-xl">{title}</div>
       {children && <div className="mt-2 text-sm text-muted">{children}</div>}
     </div>
   )
+}
+
+/** Section heading in the template's style: a small shield, then the label. */
+export function Eyebrow({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return (
+    <h2 className={`eyebrow ${className}`}>
+      <Shield className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+      {children}
+    </h2>
+  )
+}
+
+/** Pill toggle for filter rows (device, scope). The active one is solid white. */
+export function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition ${active ? 'border-white bg-white text-ink' : 'border-line text-muted hover:border-line-strong hover:text-white'}`}
+    >
+      {children}
+    </button>
+  )
+}
+
+/** Button content that rolls on hover (see the `roll` utility in index.css). The button needs overflow hidden; every btn-* has it. */
+export function Roll({ children }: { children: ReactNode }) {
+  return <span className="roll">{children}</span>
 }
 
 // ---------- toast with Undo ----------
@@ -103,18 +136,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className="pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-xl border border-line bg-panel-2 px-4 py-3 text-sm shadow-2xl"
+            className="pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-md border border-line bg-panel-2 px-4 py-3 text-sm shadow-2xl shadow-black/60"
           >
             <span className="flex-1">{t.text}</span>
             {t.action && (
               <button
-                className="font-semibold text-accent hover:underline"
+                className="relative overflow-hidden rounded-full bg-white px-3 py-1 text-xs font-medium text-ink transition hover:bg-[#eceef0]"
                 onClick={() => {
                   t.action!.run()
                   setToasts((xs) => xs.filter((x) => x.id !== t.id))
                 }}
               >
-                {t.action.label}
+                <Roll>{t.action.label}</Roll>
               </button>
             )}
           </div>

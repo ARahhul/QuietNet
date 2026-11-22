@@ -1,7 +1,7 @@
 [project]
 name = "pahra-companion"
 version = "0.1.0"
-description = "Pahra home companion: MCP server that finds TVs on the home LAN and points their DNS at Pahra"
+description = "QuietNet home companion: MCP server that finds TVs on the home LAN and points their DNS at QuietNet"
 readme = "README.md"
 requires-python = ">=3.11,<4.0"
 dependencies = [

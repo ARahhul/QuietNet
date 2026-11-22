@@ -1,6 +1,6 @@
 """pahra-companion MCP server: tool and prompt registration, plus the CLI entry point.
 
-Run over stdio (default; the Pahra backend spawns it) or streamable HTTP for MCP Inspector:
+Run over stdio (default; the QuietNet backend spawns it) or streamable HTTP for MCP Inspector:
 
     pahra-companion
     pahra-companion --http 127.0.0.1:8765
@@ -36,7 +36,7 @@ log = logging.getLogger("pahra_companion")
 
 SERVER_NAME = "pahra-companion"
 INSTRUCTIONS = """\
-Pahra home companion. Finds TVs and streamers on this computer's home LAN and points their DNS at Pahra.
+QuietNet home companion. Finds TVs and streamers on this computer's home LAN and points their DNS at QuietNet.
 Guardrails: only RFC 1918 subnets attached to a local interface (scans at most /22); no credential guessing;
 never logs into routers or TVs; ADB is limited to fixed Private-DNS commands. Every tool returns a JSON object
 with "ok"; on failure it carries "error" and usually "hint". Read-only tools have readOnlyHint=true; ask the
@@ -69,7 +69,7 @@ _forwarder = fwdmod.DnsForwarder()
 ForwarderMappings = Annotated[
     list[dict[str, str]],
     Field(
-        description='TVs to relay: [{"ip": "<TV LAN IPv4>", "client_id": "<Pahra client id, [a-z0-9-]>"}]',
+        description='TVs to relay: [{"ip": "<TV LAN IPv4>", "client_id": "<QuietNet client id, [a-z0-9-]>"}]',
         json_schema_extra={
             "items": {
                 "type": "object",
@@ -359,7 +359,7 @@ async def get_setup_options(
     cgnat: str | None = None,
     router_brand: str | None = None,
 ) -> dict[str, Any]:
-    """Ranked ways to point a device's DNS at Pahra, with step-by-step instructions from the hand-written
+    """Ranked ways to point a device's DNS at QuietNet, with step-by-step instructions from the hand-written
     guide library. platform: android_tv | google_tv | fire_tv | webos | tizen | roku | apple_tv | router |
     unknown. brand: TV brand (e.g. sony, tcl, xiaomi, oneplus, lg, samsung) or, for platform=router, the router
     brand (jiofiber, airtel, tp-link, act). cgnat: cgnat | not_cgnat | unknown (from get_network_context).
@@ -422,9 +422,9 @@ async def _require_connected(serial: str) -> dict[str, Any] | None:
 
 @_safe
 async def set_private_dns(ip: str, hostname: str, port: int = 5555) -> dict[str, Any]:
-    """Point an ADB-connected Android TV / Google TV / Fire TV at Pahra: sets
+    """Point an ADB-connected Android TV / Google TV / Fire TV at QuietNet: sets
     `settings put global private_dns_specifier <hostname>` and `private_dns_mode hostname`, then reads both
-    back. Needs Android 9+ (SDK 28). `hostname` is the device's Pahra DoT hostname from the backend.
+    back. Needs Android 9+ (SDK 28). `hostname` is the device's QuietNet DoT hostname from the backend.
     Returns before/after values; undo with clear_private_dns."""
     addr = netinfo.check_lan_ip(ip)
     port = _port(port)
@@ -437,7 +437,7 @@ async def set_private_dns(ip: str, hostname: str, port: int = 5555) -> dict[str,
         return _err("Private DNS read-back did not match", "The device may not support Private DNS over ADB; use get_setup_options.",
                     "verify_failed", **r, hostname=hostname)
     return {"ok": True, "serial": serial, "hostname": hostname, **r,
-            "next": "Verify the device's ClientID appears in the Pahra/AdGuard query log; if not within ~60 s, fall back to get_setup_options."}
+            "next": "Verify the device's ClientID appears in the QuietNet/AdGuard query log; if not within ~60 s, fall back to get_setup_options."}
 
 
 @_safe
@@ -470,7 +470,7 @@ def _forwarder_listen_ip() -> str:
 @_safe
 async def start_dns_forwarder(mappings: ForwarderMappings, dns_hostname: str, port: int = 53) -> dict[str, Any]:
     """Start the laptop DNS relay for TVs that only take a plain IPv4 DNS server (LG webOS, Samsung Tizen,
-    Apple TV), so each keeps its own Pahra identity even behind CGNAT. Listens on this laptop's LAN IP
+    Apple TV), so each keeps its own QuietNet identity even behind CGNAT. Listens on this laptop's LAN IP
     (UDP+TCP `port`), answers only the mapped TV IPs (others get REFUSED), and forwards each query over DoH
     to https://<dns_hostname>/dns-query/<client_id> without caching. Calling it again replaces the whole
     mapping set. The user then sets the TV's DNS server to the returned listen_ip. The laptop must stay on."""
@@ -520,7 +520,7 @@ async def dns_forwarder_status() -> dict[str, Any]:
 # --------------------------------------------------------------------------- prompt
 
 CONNECT_DEVICE_PLAYBOOK = """\
-You are helping the user connect a TV or streaming device to Pahra (a per-device DNS filter).
+You are helping the user connect a TV or streaming device to QuietNet (a per-device DNS filter).
 The user described the device as: "{description}"
 
 Follow this playbook with the pahra-companion tools. Ask the user before every tool that is not read-only
@@ -542,18 +542,18 @@ Follow this playbook with the pahra-companion tools. Ask the user before every t
    c. Otherwise adb_connect. If the status is unauthorized, ask the user to accept "Allow USB debugging?" on the
       TV (tick Always allow), then call adb_connect again.
    d. Check the SDK level (adb_status / adb_connect). If it is below 28, Private DNS is impossible: go to step 5.
-   e. Call set_private_dns(ip, hostname) with the device's Pahra hostname that the caller provides. Never
+   e. Call set_private_dns(ip, hostname) with the device's QuietNet hostname that the caller provides. Never
       invent a hostname. Report before/after.
-   f. The caller verifies that the device's ClientID appears in the Pahra query log. If it does not, go to
+   f. The caller verifies that the device's ClientID appears in the QuietNet query log. If it does not, go to
       step 5. Offer clear_private_dns to undo.
 5. Locked platforms (webos, tizen, roku, apple_tv), ADB refused, or verification failed:
    call get_setup_options(platform, brand, model, cgnat, router_brand) and present the options in rank order.
    - Router DNS is recommended only when the CGNAT verdict is not_cgnat.
    - Otherwise prefer manual DNS on the TV pointed at the laptop relay (options with starts_forwarder=true):
-     call start_dns_forwarder with the TV's LAN IP and its Pahra client_id (both from the caller; include
+     call start_dns_forwarder with the TV's LAN IP and its QuietNet client_id (both from the caller; include
      every TV already relayed, because the call replaces the whole mapping set), then tell the user to type the
      returned listen_ip as the TV's DNS server and to keep this laptop on. Pass on the firewall hint. Then
-     check dns_forwarder_status or the Pahra query log for the TV's queries. A phone hotspot is a demo-only
+     check dns_forwarder_status or the QuietNet query log for the TV's queries. A phone hotspot is a demo-only
      fallback.
    - Fill placeholders ({{dns_server_ip}}, {{hostname}}, {{gateway_ip}}, {{forwarder_ip}} = the relay's
      listen_ip) with values the caller provides.
@@ -566,7 +566,7 @@ touch devices on the local LAN. If adb is missing, tell the user to install it: 
 
 
 def connect_device(description: str) -> str:
-    """Playbook for finding a TV the user describes and connecting it to Pahra (ADB Private DNS where possible,
+    """Playbook for finding a TV the user describes and connecting it to QuietNet (ADB Private DNS where possible,
     otherwise ranked manual/router guidance that accounts for CGNAT)."""
     return CONNECT_DEVICE_PLAYBOOK.format(description=description.strip() or "a TV")
 

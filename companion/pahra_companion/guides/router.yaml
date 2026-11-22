@@ -1,16 +1,16 @@
-# Router DNS: the router hands the Pahra DNS server to every device on the network over DHCP.
-# The user does this in the router's own admin page. Pahra never logs into the router.
+# Router DNS: the router hands the QuietNet DNS server to every device on the network over DHCP.
+# The user does this in the router's own admin page. QuietNet never logs into the router.
 # Hand-written, not checked on these routers: every variant is `verified: false`.
 platform: router
 title: Home router
 automatable: false
 summary: >-
-  Changing the DNS server your router hands out covers every device at once. Pahra then sees
+  Changing the DNS server your router hands out covers every device at once. QuietNet then sees
   your home's public IP, so this needs a public IP that is yours alone. Behind CGNAT it isn't.
 limitations:
-  - Pahra never logs into your router and never guesses its password. You make the change yourself.
-  - Pahra sees all devices behind the router as one client, unless the router can hand out different DNS servers per device.
-  - "Behind CGNAT (common on JioFiber, Airtel and ACT IPv4) your public IPv4 is shared with other customers and changes. Pahra cannot link it to your home, so router DNS pointed at the Pahra VM does not work reliably."
+  - QuietNet never logs into your router and never guesses its password. You make the change yourself.
+  - QuietNet sees all devices behind the router as one client, unless the router can hand out different DNS servers per device.
+  - "Behind CGNAT (common on JioFiber, Airtel and ACT IPv4) your public IPv4 is shared with other customers and changes. QuietNet cannot link it to your home, so router DNS pointed at the QuietNet VM does not work reliably."
   - Some ISP-supplied routers do not let you change the DNS servers at all.
 options:
   - id: router_dns
@@ -20,7 +20,7 @@ options:
     gives_per_device_identity: false
     needs: [dns_server_ip, gateway_ip]
     notes:
-      - Do not add a public resolver such as 8.8.8.8 as the secondary DNS. Devices would use it at random and skip Pahra. Leave it empty or repeat {dns_server_ip}.
+      - Do not add a public resolver such as 8.8.8.8 as the secondary DNS. Devices would use it at random and skip QuietNet. Leave it empty or repeat {dns_server_ip}.
       - Devices pick up the new DNS when they renew their DHCP lease. Restart the TV, or turn its Wi-Fi off and on.
     variants:
       - label: Any router (generic)

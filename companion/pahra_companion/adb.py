@@ -63,7 +63,7 @@ def validate_hostname(hostname: str) -> str:
     if not h or len(h) > 253 or not _HOSTNAME.match(h):
         raise AdbCommandRejected(
             f"invalid hostname {hostname!r}",
-            "Use the Pahra DNS hostname exactly, e.g. tv-1a2b.dns.example.com (letters, digits, '-' and '.').",
+            "Use the QuietNet DNS hostname exactly, e.g. tv-1a2b.dns.example.com (letters, digits, '-' and '.').",
         )
     return h
 

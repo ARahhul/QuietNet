@@ -1,7 +1,7 @@
 import { CheckCircle2, Loader2, Search, ShieldQuestion, Wrench } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { API_TOKEN, withToken } from '../../api'
-import { CopyField } from '../ui'
+import { apiUrl, bearer, withToken } from '../../api'
+import { CopyField, Roll } from '../ui'
 
 /** Event protocol streamed by GET /api/assistant/sessions/{id}/stream (SSE, JSON per message). */
 export type AssistantEvent =
@@ -21,9 +21,9 @@ export type AssistantEvent =
   | { type: 'mode'; mode: 'agent' | 'guided'; note?: string }
 
 async function post(path: string, body: unknown) {
-  const r = await fetch(`/api${path}`, {
+  const r = await fetch(apiUrl(path), {
     method: 'POST',
-    headers: { Authorization: `Bearer ${API_TOKEN}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${await bearer()}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
   if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.detail ?? `HTTP ${r.status}`)
@@ -102,11 +102,11 @@ export default function AssistantPanel({ onConnected }: { onConnected?: () => vo
             onKeyDown={(e) => e.key === 'Enter' && desc.trim() && start()}
           />
           <button className="btn-primary" disabled={!desc.trim()} onClick={start}>
-            <Search className="h-4 w-4" /> Find it
+            <Roll><Search className="h-4 w-4" /> Find it</Roll>
           </button>
         </div>
         <div className="text-[11px] text-muted">
-          Pahra scans only your home WiFi. Device names and models (not IP or MAC addresses) are shared with the AI. Nothing on your TV
+          QuietNet scans only your home WiFi. Device names and models (not IP or MAC addresses) are shared with the AI. Nothing on your TV
           changes without your OK.
         </div>
         {err && <div className="text-sm text-danger">{err}</div>}
@@ -126,7 +126,7 @@ export default function AssistantPanel({ onConnected }: { onConnected?: () => vo
             ) : null
           case 'message':
             return (
-              <div key={i} className={`whitespace-pre-line ${ev.role === 'user' ? 'ml-auto max-w-[85%] rounded-xl bg-accent/20 px-3 py-2' : 'max-w-[90%] rounded-xl bg-panel-2 px-3 py-2'}`}>
+              <div key={i} className={`whitespace-pre-line ${ev.role === 'user' ? 'ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-white px-3.5 py-2 text-ink' : 'max-w-[90%] rounded-2xl rounded-bl-md bg-panel-2 px-3.5 py-2'}`}>
                 {ev.text}
               </div>
             )
@@ -147,29 +147,29 @@ export default function AssistantPanel({ onConnected }: { onConnected?: () => vo
             return (
               <div key={i} className="grid gap-2">
                 {ev.devices.map((d) => (
-                  <button key={d.handle} disabled={finished || !waitingInput} onClick={() => send(`It's ${d.handle}`)} className="card flex items-center gap-3 p-3 text-left hover:border-accent">
+                  <button key={d.handle} disabled={finished || !waitingInput} onClick={() => send(`It's ${d.handle}`)} className="card card-link group flex items-center gap-3 p-3 text-left">
                     <div className="flex-1">
-                      <div className="font-semibold">{d.label}</div>
+                      <div className="font-medium">{d.label}</div>
                       <div className="text-xs text-muted">
                         {d.platform} · {d.detail}
                       </div>
                     </div>
-                    <span className="text-xs text-accent">This one</span>
+                    <span className="underline-slide text-xs text-guard">This one</span>
                   </button>
                 ))}
               </div>
             )
           case 'confirm_required':
             return (
-              <div key={i} className="rounded-xl border border-warn/50 bg-warn/10 p-3">
+              <div key={i} className="rounded-md border border-warn/50 bg-warn/10 p-3">
                 <div>{ev.prompt}</div>
                 {!answered.has(ev.call_id) && (
                   <div className="mt-2 flex gap-2">
                     <button className="btn-primary px-3 py-1.5" onClick={() => confirm(ev.call_id, true)}>
-                      Allow
+                      <Roll>Allow</Roll>
                     </button>
                     <button className="btn-ghost px-3 py-1.5" onClick={() => confirm(ev.call_id, false)}>
-                      Don't
+                      <Roll>Don't</Roll>
                     </button>
                   </div>
                 )}
@@ -177,18 +177,18 @@ export default function AssistantPanel({ onConnected }: { onConnected?: () => vo
             )
           case 'input_required':
             return (
-              <div key={i} className="max-w-[90%] rounded-xl bg-panel-2 px-3 py-2">
+              <div key={i} className="max-w-[90%] rounded-2xl rounded-bl-md bg-panel-2 px-3.5 py-2">
                 {ev.prompt}
               </div>
             )
           case 'done':
             return (
               <div key={i} className={`card p-4 ${ev.outcome === 'connected' ? 'border-guard/60' : ''}`}>
-                <div className="flex items-center gap-2 font-semibold">
-                  {ev.outcome === 'connected' ? <CheckCircle2 className="h-5 w-5 text-guard" /> : <Wrench className="h-5 w-5 text-accent" />}
+                <div className="flex items-center gap-2 font-display text-lg">
+                  {ev.outcome === 'connected' ? <CheckCircle2 className="h-5 w-5 text-guard" /> : <Wrench className="h-5 w-5 text-guard" />}
                   {ev.outcome === 'connected' ? 'Connected' : ev.guide?.title ?? 'Next steps'}
                 </div>
-                <p className="mt-1 text-slate-300">{ev.text}</p>
+                <p className="mt-1 text-body">{ev.text}</p>
                 {ev.guide && (
                   <>
                     {ev.guide.values &&
@@ -226,7 +226,7 @@ export default function AssistantPanel({ onConnected }: { onConnected?: () => vo
             onKeyDown={(e) => e.key === 'Enter' && send(reply)}
           />
           <button className="btn-ghost" onClick={() => send(reply)}>
-            Send
+            <Roll>Send</Roll>
           </button>
         </div>
       )}

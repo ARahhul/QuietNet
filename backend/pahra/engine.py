@@ -6,14 +6,17 @@ import sqlite3
 
 from .adguard.client import AdGuardClient, AdGuardError
 from .adguard.sync import AdGuardSync
+from .auth import FirebaseVerifier
 from .config import Settings
 from .db import ensure_seed_user, init_sqlite_wal
+from . import home_address
 from .events import purge_old_events
 from .pipeline.clues import ClueFetcher
 from .pipeline.explainer import Explainer
 from .pipeline.lists import ListIndex, load_lists
 from .pipeline.run import Pipeline
 from .poller import Observed, Poller
+from .tracing import Tracing
 
 log = logging.getLogger("pahra.engine")
 
@@ -22,16 +25,33 @@ class Engine:
     def __init__(self, settings: Settings, conn: sqlite3.Connection | None = None, ag: AdGuardClient | None = None):
         self.settings = settings
         self.conn = conn or init_sqlite_wal(settings.db_path)
+        # The operator's account (API token). Requests carry their own account: see pahra.api.deps.engine.
         self.user_id = ensure_seed_user(self.conn, settings.seed_user_email)
+        self.auth = FirebaseVerifier(settings.firebase_project_id, settings.firebase_auth_emulator_host)
         self.ag = ag or AdGuardClient(settings.adguard_url, settings.adguard_user, settings.adguard_pass)
         self.sync = AdGuardSync(self.conn, self.ag, settings)
         self.lists = self._initial_lists()
         self.clues = ClueFetcher(self.conn, online=not settings.offline_lists)
-        self.explainer = Explainer(settings.gemini_api_key, settings.gemini_model, settings.gemini_batch_size)
+        self.tracing = Tracing.from_settings(settings)  # Langfuse; a no-op without keys
+        if settings.llm_api_key and settings.llm_base_url:
+            self.explainer = Explainer(
+                settings.llm_api_key,
+                settings.llm_model,
+                settings.gemini_batch_size,
+                base_url=settings.llm_base_url,
+                tracing=self.tracing,
+            )
+        else:
+            self.explainer = Explainer(
+                settings.gemini_api_key, settings.gemini_model, settings.gemini_batch_size, tracing=self.tracing
+            )
         self.pipeline = Pipeline(self.conn, self.lists, self.clues, self.explainer, self.sync)
-        self.poller = Poller(self.conn, self.ag, settings.poll_interval_s, self._on_observed, self._on_tick)
+        self.poller = Poller(
+            self.conn, self.ag, settings.poll_interval_s, self._on_observed, self._on_tick, settings.query_log_hours
+        )
         self.companion = None  # set by assistant.mcp_client when enabled
         self.forwarder: dict = {"running": False, "devices": 0}  # laptop DNS relay state (pahra.forwarder)
+        self.home_follow: dict[str, dict] = {}  # device id -> last Dynamic DNS check (pahra.home_address)
         self._tasks: list[asyncio.Task] = []
         self._pipeline_lock = asyncio.Lock()
 
@@ -71,6 +91,20 @@ class Engine:
                 log.exception("list refresh failed")
             await asyncio.sleep(24 * 3600)
 
+    async def _follow_homes_loop(self) -> None:
+        """Keep each home's linked IP on its Dynamic DNS name (a new IP from the provider shouldn't cut it off)."""
+        while True:
+            try:
+                if await home_address.follow_all(self):
+                    try:
+                        await self.sync.sync_all()
+                    except AdGuardError as e:
+                        log.warning("AdGuard sync after a home address change failed (retried): %s", e)
+                        self.sync.dirty = True
+            except Exception:
+                log.exception("following home addresses failed")
+            await asyncio.sleep(self.settings.ddns_check_s)
+
     async def _purge_loop(self) -> None:
         while True:
             n = purge_old_events(self.conn, self.settings.event_retention_days)
@@ -85,9 +119,11 @@ class Engine:
             log.warning("AdGuard not reachable at startup (%s); will retry", e)
         if background:
             self._tasks = [
+                asyncio.create_task(self.tracing.push_prompts(self.conn), name="langfuse-prompts"),
                 asyncio.create_task(self.poller.run_forever(), name="poller"),
                 asyncio.create_task(self._refresh_lists(), name="lists"),
                 asyncio.create_task(self._purge_loop(), name="purge"),
+                asyncio.create_task(self._follow_homes_loop(), name="home-address"),
             ]
 
     async def stop(self) -> None:
@@ -96,3 +132,4 @@ class Engine:
         await asyncio.gather(*self._tasks, return_exceptions=True)
         await self.clues.aclose()
         await self.ag.aclose()
+        await asyncio.to_thread(self.tracing.shutdown)

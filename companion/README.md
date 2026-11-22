@@ -1,12 +1,12 @@
 # pahra-companion
 
-A local MCP server that runs on the laptop, on the home LAN. It finds the TV the user describes, then points that TV's DNS at Pahra:
+A local MCP server that runs on the laptop, on the home LAN. It finds the TV the user describes, then points that TV's DNS at QuietNet:
 
 * **Android TV, Google TV and Fire TV:** it sets Android Private DNS over ADB automatically.
 * **LG webOS, Samsung Tizen, Roku, Apple TV and routers:** it returns ranked, step-by-step guidance that takes CGNAT into account.
-* **TVs that only take a plain IPv4 DNS server (webOS, Tizen, Apple TV):** it can run a **DNS relay** on the laptop's LAN IP. The TV's DNS points at the laptop. The relay forwards each mapped TV's queries over DoH to `https://<dns_hostname>/dns-query/<client_id>`, so every TV keeps its own Pahra identity, even behind CGNAT.
+* **TVs that only take a plain IPv4 DNS server (webOS, Tizen, Apple TV):** it can run a **DNS relay** on the laptop's LAN IP. The TV's DNS points at the laptop. The relay forwards each mapped TV's queries over DoH to `https://<dns_hostname>/dns-query/<client_id>`, so every TV keeps its own QuietNet identity, even behind CGNAT.
 
-The Pahra backend spawns it over **stdio**, and a Gemini agent uses its tools. It can also serve **streamable HTTP** for MCP Inspector.
+The QuietNet backend spawns it over **stdio**, and a Gemini agent uses its tools. It can also serve **streamable HTTP** for MCP Inspector.
 
 ## Install and run
 
@@ -68,7 +68,7 @@ Read-only tools carry `readOnlyHint: true`. The others carry `readOnlyHint: fals
 | `adb_pair(ip, port, code)` | mutating | `paired`. Then call `adb_connect` with the Wireless-debugging connect port |
 | `set_private_dns(ip, hostname, port=5555)` | mutating, destructive | Needs SDK ≥ 28. Writes `private_dns_specifier` and then `private_dns_mode=hostname`, reads both back, and returns `before`, `after` and `verified` |
 | `clear_private_dns(ip, port=5555)` | mutating, destructive | Sets `private_dns_mode=opportunistic` and returns `before` and `after` |
-| `start_dns_forwarder(mappings, dns_hostname, port=53)` | mutating, contacts the Pahra DoH server | `mappings` is `[{"ip": "<TV LAN IP>", "client_id": "<[a-z0-9-]{1,63}>"}]`. Returns `{ok, running: true, listen_ip, port, mappings, upstream_template: "https://<dns_hostname>/dns-query/<client_id>", rebound, hint}`. Calling it again replaces the whole mapping set and rebinds only if the port changes. A bind failure gives `code: "bind_failed"` with a hint |
+| `start_dns_forwarder(mappings, dns_hostname, port=53)` | mutating, contacts the QuietNet DoH server | `mappings` is `[{"ip": "<TV LAN IP>", "client_id": "<[a-z0-9-]{1,63}>"}]`. Returns `{ok, running: true, listen_ip, port, mappings, upstream_template: "https://<dns_hostname>/dns-query/<client_id>", rebound, hint}`. Calling it again replaces the whole mapping set and rebinds only if the port changes. A bind failure gives `code: "bind_failed"` with a hint |
 | `stop_dns_forwarder()` | mutating | `{ok, running: false, was_running, stats}` |
 | `dns_forwarder_status()` | read-only | `{ok, running, listen_ip, port, mappings, stats: {queries, forwarded, refused, errors}, per_client: {client_id: {queries, last_ts}}, started_at}`. `last_ts` is ISO 8601 UTC |
 

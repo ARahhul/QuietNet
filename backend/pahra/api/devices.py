@@ -2,17 +2,19 @@ import ipaddress
 import re
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from ..adguard.client import AdGuardError
-from .. import forwarder
+from .. import forwarder, home_address, setup_check
+from ..adguard.rules import validate_domain
 from ..db import get_meta, new_id, now_iso, row_to_dict
 from ..engine import Engine
 from ..queries import device_activity, devices_overview
 from ..setup_guides import CGNAT_NET, default_setup_method, mobileconfig, setup_guide
 from .deps import engine
+from .misc import home_ip
 
 router = APIRouter(tags=["devices"])
 
@@ -34,6 +36,8 @@ class DevicePatch(BaseModel):
     setup_method: SetupMethod | None = None
     linked_ip: str | None = None
     allow_shared_ipv4: bool = False  # hackathon demo only (CGNAT)
+    # Router's Dynamic DNS name to follow ("" stops following). Set from the home: it must point here.
+    ddns_host: str | None = Field(default=None, max_length=253)
 
 
 def slug_client_id(e: Engine, name: str, wanted: str | None) -> str:
@@ -77,19 +81,42 @@ async def create_device(body: DeviceIn, e: Engine = Depends(engine)):
     return {"device": dev, "setup": setup_guide(e.settings, dev), "synced": synced}
 
 
+def _with_follow(e: Engine, d: dict) -> dict:
+    return d | {"ddns_status": e.home_follow.get(d["id"]) if d.get("ddns_host") else None}
+
+
 @router.get("/devices")
 async def list_devices(e: Engine = Depends(engine)):
-    return devices_overview(e.conn, e.user_id)
+    return [_with_follow(e, d) for d in devices_overview(e.conn, e.user_id)]
 
 
 @router.get("/devices/{device_id}")
 async def get_device(device_id: str, e: Engine = Depends(engine)):
     _get(e, device_id)
-    return next(d for d in devices_overview(e.conn, e.user_id) if d["id"] == device_id)
+    return _with_follow(e, next(d for d in devices_overview(e.conn, e.user_id) if d["id"] == device_id))
+
+
+async def _follow_from_here(e: Engine, request: Request, raw: str) -> dict:
+    """Columns to set for a Dynamic DNS name: it must point at the address this request comes from (the home)."""
+    try:
+        host = validate_domain(raw.strip().lower().removeprefix("http://").removeprefix("https://").split("/")[0])
+    except ValueError:
+        raise HTTPException(422, "That doesn't look like a hostname. Copy it from the router, e.g. myhome.tplinkdns.com.")
+    ips, problem = await home_address.public_addresses(host)
+    if problem:
+        raise HTTPException(422, problem)
+    here = await home_ip(request)
+    if here not in ips:
+        raise HTTPException(
+            409,
+            f"{host} points to {', '.join(ips)}, but this page is coming from {here or 'an unknown address'}. "
+            "Open this page on your home WiFi (not mobile data), and give the router a minute to update the name.",
+        )
+    return {"ddns_host": host, "linked_ip": here}
 
 
 @router.patch("/devices/{device_id}")
-async def patch_device(device_id: str, body: DevicePatch, e: Engine = Depends(engine)):
+async def patch_device(device_id: str, body: DevicePatch, request: Request, e: Engine = Depends(engine)):
     dev = _get(e, device_id)
     if body.linked_ip is not None and body.linked_ip != "":
         try:
@@ -106,14 +133,29 @@ async def patch_device(device_id: str, body: DevicePatch, e: Engine = Depends(en
                 "IPv4 linking is unsafe if your ISP uses CGNAT (others on the same IP would share this profile). "
                 "Prefer IPv6; set allow_shared_ipv4=true only for the demo.",
             )
-    updates = {k: v for k, v in body.model_dump(exclude={"allow_shared_ipv4"}).items() if v is not None}
+    updates = {k: v for k, v in body.model_dump(exclude={"allow_shared_ipv4", "ddns_host"}).items() if v is not None}
     if "linked_ip" in updates and updates["linked_ip"] == "":
         updates["linked_ip"] = None
+    if body.ddns_host is not None:
+        if body.ddns_host.strip():
+            updates |= await _follow_from_here(e, request, body.ddns_host)
+            e.home_follow[dev["id"]] = {"host": updates["ddns_host"], "checked_at": now_iso(), "ip": updates["linked_ip"], "error": None}
+        else:
+            updates["ddns_host"] = None
+            e.home_follow.pop(dev["id"], None)
+    if updates.get("linked_ip") and e.conn.execute(
+        "SELECT 1 FROM devices WHERE linked_ip = ? AND id != ?", (updates["linked_ip"], dev["id"])
+    ).fetchone():
+        raise HTTPException(
+            409,
+            f"{updates['linked_ip']} is already linked to another QuietNet device. One internet address can only belong "
+            "to one device: if it's another home on the same shared address, use encrypted DNS on each device instead.",
+        )
     if updates:
         sets = ", ".join(f"{k} = ?" for k in updates)
         e.conn.execute(f"UPDATE devices SET {sets} WHERE id = ?", (*updates.values(), dev["id"]))
     synced = await _sync_after_device_change(e)
-    return {"device": _get(e, device_id), "synced": synced}
+    return {"device": _with_follow(e, _get(e, device_id)), "synced": synced}
 
 
 @router.delete("/devices/{device_id}", status_code=204)
@@ -133,6 +175,12 @@ async def delete_device(device_id: str, e: Engine = Depends(engine)):
 @router.get("/devices/{device_id}/setup")
 async def device_setup(device_id: str, e: Engine = Depends(engine)):
     return setup_guide(e.settings, _get(e, device_id), get_meta(e.conn, "forwarder_listen_ip"))
+
+
+@router.post("/devices/{device_id}/check")
+async def device_check(device_id: str, request: Request, e: Engine = Depends(engine)):
+    """"I've done it": are this device's lookups reaching QuietNet? Reads AdGuard's query log fresh first."""
+    return await setup_check.check(e, _get(e, device_id), lambda: home_ip(request))
 
 
 @router.get("/devices/{device_id}/profile.mobileconfig")

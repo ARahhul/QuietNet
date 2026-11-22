@@ -1,0 +1,62 @@
+# Everything on the VM: AdGuard (DNS) + QuietNet backend (engine/API) + Caddy (HTTPS on :443).
+# Brought up by cloud-up.sh, which also issues the certificate and initializes AdGuard. Layout on the VM:
+#   ~/quietnet/infra    (this folder; backend.env lives here, created by cloud-secrets.sh)
+#   ~/quietnet/backend  (built into the backend image)
+# Public ports: 53 (DNS), 853 (DoT/DoQ), 443 (DoH on DNS_HOST, API on API_HOST). Nothing else.
+services:
+  adguardhome:
+    image: adguard/adguardhome:latest
+    container_name: pahra-dns-gateway
+    restart: unless-stopped
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "853:853/tcp"       # DoT  <client-id>.dns.<domain>
+      - "853:853/udp"       # DoQ
+      - "127.0.0.1:3000:3000/tcp"  # admin API/UI, localhost only (SSH tunnel for debugging)
+    volumes:
+      - ./agd-work:/opt/adguardhome/work
+      - ./agd-conf:/opt/adguardhome/conf
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+
+  backend:
+    build: ../backend
+    image: quietnet-backend
+    container_name: quietnet-backend
+    restart: unless-stopped
+    env_file: ./backend.env
+    environment:
+      ADGUARD_URL: http://adguardhome:3000
+      LANGFUSE_ENVIRONMENT: production
+      # The companion (LAN scan, ADB, TV relay) has to run on a computer at home, not here.
+      COMPANION_ENABLED: "false"
+      API_DOCS: "false"            # don't publish a map of every endpoint
+    ports:
+      - "127.0.0.1:8000:8000"      # localhost only, for debugging over SSH; the public path is Caddy
+    volumes:
+      - backend-data:/data
+    depends_on:
+      - adguardhome
+
+  caddy:
+    image: caddy:2
+    container_name: pahra-doh-proxy
+    restart: unless-stopped
+    environment:
+      DNS_HOST: ${DNS_HOST:?set DNS_HOST=dns.<domain>}
+      API_HOST: ${API_HOST:?set API_HOST=api.<domain>}
+    ports:
+      - "443:443/tcp"
+    volumes:
+      - ./Caddyfile.cloud:/etc/caddy/Caddyfile:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - adguardhome
+      - backend
+
+volumes:
+  backend-data:
+  caddy-data:
+  caddy-config:

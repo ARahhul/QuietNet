@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check a Pahra DNS server from the laptop (Windows has no kdig/dig). Needs dnspython + httpx:
+"""Check a QuietNet DNS server from the laptop (Windows has no kdig/dig). Needs dnspython + httpx:
 run it with the companion's Python:
 
     companion\\.venv\\Scripts\\python infra\\verify.py --dns-host dns.example.com --client-id test-phone --vm-ip 203.0.113.10
@@ -9,7 +9,7 @@ Checks:
   2. DoH at https://dns.<domain>/dns-query/<client-id>
   3. the AdGuard admin/login page is NOT public on https://dns.<domain>/
   4. plain DNS on :53 from this network is REFUSED (the access list is closed to strangers)
-Use a client id that exists in Pahra (add the device first), or 1 and 2 are REFUSED too.
+Use a client id that exists in QuietNet (add the device first), or 1 and 2 are REFUSED too.
 """
 
 import argparse
@@ -72,9 +72,9 @@ def check_plain_refused(vm_ip: str, name: str = PROBE) -> tuple[bool, str]:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description="Verify a Pahra DNS server")
+    p = argparse.ArgumentParser(description="Verify a QuietNet DNS server")
     p.add_argument("--dns-host", required=True, help="e.g. dns.example.com")
-    p.add_argument("--client-id", required=True, help="a device's Pahra id, e.g. test-phone")
+    p.add_argument("--client-id", required=True, help="a device's QuietNet id, e.g. test-phone")
     p.add_argument("--vm-ip", help="VM public IP, for the port-53 check")
     a = p.parse_args()
 

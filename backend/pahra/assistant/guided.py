@@ -62,8 +62,8 @@ def _relay_first(opts: dict) -> bool:
 async def _relay(s: AssistantSession, brand: str | None) -> bool:
     """Offer the laptop DNS relay. Returns True if the session finished through it."""
     ip = s.target_ip
-    await s.say("This TV can't take Pahra's private address directly, and your internet provider shares one public IP "
-                "between many homes (CGNAT). Pahra can relay the TV's DNS through this laptop instead, so it keeps its own identity.")
+    await s.say("This TV can't take QuietNet's private address directly, and your internet provider shares one public IP "
+                "between many homes (CGNAT). QuietNet can relay the TV's DNS through this laptop instead, so it keeps its own identity.")
     res = await s.setup_forwarder(ip, s.label(ip), brand)
     if not res.get("ok"):
         if not res.get("declined"):
@@ -78,7 +78,7 @@ async def _relay(s: AssistantSession, brand: str | None) -> bool:
         if "skip" in r.lower():
             break
         if await s.verify_connected():
-            await s.finish("connected", f"{_cap(s.label(ip))} now uses Pahra through this laptop. Keep the laptop on and Pahra "
+            await s.finish("connected", f"{_cap(s.label(ip))} now uses QuietNet through this laptop. Keep the laptop on and QuietNet "
                            "running while you watch: if it sleeps, the TV can't look up names until it wakes.")
             return True
         await s.say(f"No query from the TV yet. Check that its DNS shows {s.forwarder_ip} and that Windows Firewall allows "
@@ -95,7 +95,7 @@ async def _guide(s: AssistantSession, platform: str, brand: str | None, model: s
             return
     g = s.guide_from_options(prefer_manual=True, use_forwarder=bool(s.forwarder_ip))
     await s.finish("guide", why, g or {"title": "Connect through your router", "steps": [
-        "Open your router's admin page and set its DNS server to the Pahra server IP.",
+        "Open your router's admin page and set its DNS server to the QuietNet server IP.",
         "If your ISP uses CGNAT, use a phone hotspot for the demo instead.",
     ], "values": {}, "ai_suggested": False})
 
@@ -215,7 +215,7 @@ async def run_guided(s: AssistantSession) -> None:
             if not res.get("ok"):
                 return await _guide(s, platform, brand, model, f"Setting Private DNS didn't work ({res.get('error')}). Here's another way.")
             if await s.verify_connected():
-                return await s.finish("connected", f"{s.label(ip)} now uses Pahra ({s.hostname()}). Its trackers will appear in Suggestions within a minute.")
+                return await s.finish("connected", f"{s.label(ip)} now uses QuietNet ({s.hostname()}). Its trackers will appear in Suggestions within a minute.")
             return await _guide(s, platform, brand, model,
                                 "Private DNS is set, but the TV hasn't used it yet. Some Fire OS builds ignore it. Here's a reliable alternative.")
     await _guide(s, platform, brand, model, "I couldn't get ADB working. Here's the manual way.")

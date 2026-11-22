@@ -13,7 +13,7 @@ from ..knowledge import is_acr, is_must_allow, is_must_allow_any_device
 from ..poller import Observed
 from .clues import ClueFetcher
 from .confidence import apply_confidence
-from .explainer import Explainer
+from .explainer import AI_LABELS, Explainer
 from .fastchecks import fast_check
 from .lists import ListIndex
 from .normalize import root_domain
@@ -137,7 +137,7 @@ class Pipeline:
         n = 0
         for c in clue_list:
             v = verdicts[c.domain]
-            if v.get("explained_by") != "gemini":
+            if v.get("explained_by") not in AI_LABELS:
                 continue
             v = apply_confidence(v, c.fast, c.beacon, is_must_allow_any_device(c.domain))
             sig = json.loads(

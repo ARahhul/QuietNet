@@ -8,7 +8,7 @@ limitations: []
 options:
   - id: laptop_forwarder
     kind: forwarder
-    title: Point the TV's DNS at this laptop (Pahra DNS relay)
+    title: Point the TV's DNS at this laptop (QuietNet DNS relay)
     automatable: false
     available: true
     starts_forwarder: true
@@ -16,27 +16,27 @@ options:
     gives_per_device_identity: true
     needs: [forwarder_ip]
     notes:
-      - Pahra runs a small DNS relay on this laptop's LAN IP. It forwards the TV's queries to Pahra over DoH under the TV's own ClientID, so the TV keeps its own identity even behind CGNAT.
-      - The TV loses DNS, and with it most apps, whenever this laptop sleeps, shuts down or leaves the network, or Pahra is not running.
+      - QuietNet runs a small DNS relay on this laptop's LAN IP. It forwards the TV's queries to QuietNet over DoH under the TV's own ClientID, so the TV keeps its own identity even behind CGNAT.
+      - The TV loses DNS, and with it most apps, whenever this laptop sleeps, shuts down or leaves the network, or QuietNet is not running.
       - The relay recognises the TV by its IP address. Reserve the TV's IP in the router (DHCP reservation) or give it a static IP. Keep this laptop's IP fixed too, because the TV points at it.
-      - Windows Firewall must allow inbound DNS (UDP and TCP 53) on the Private profile. Pahra shows the exact command to run once as administrator.
+      - Windows Firewall must allow inbound DNS (UDP and TCP 53) on the Private profile. QuietNet shows the exact command to run once as administrator.
     variants:
       - label: Laptop DNS relay
         brands: []
         verified: false
         steps:
-          - Keep this laptop on and connected to the home network, with Pahra running. Set it not to sleep while plugged in.
-          - Pahra starts its DNS relay on this laptop at {forwarder_ip}.
+          - Keep this laptop on and connected to the home network, with QuietNet running. Set it not to sleep while plugged in.
+          - QuietNet starts its DNS relay on this laptop at {forwarder_ip}.
           - On the TV, set the DNS server to {forwarder_ip}, using the TV's manual DNS steps.
   - id: hotspot_demo
     kind: hotspot
-    title: Demo only - join the TV to a phone hotspot and point its DNS at the Pahra server
+    title: Demo only - join the TV to a phone hotspot and point its DNS at the QuietNet server
     automatable: false
     available: true
     gives_per_device_identity: false
     needs: [dns_server_ip]
     notes:
-      - For demos only. Pahra links the hotspot's current public IP to the TV. Mobile networks change that IP often and are themselves behind CGNAT, so this stops working after a while.
+      - For demos only. QuietNet links the hotspot's current public IP to the TV. Mobile networks change that IP often and are themselves behind CGNAT, so this stops working after a while.
     variants:
       - label: Phone hotspot
         brands: []
@@ -44,4 +44,4 @@ options:
         steps:
           - Turn on the hotspot on a phone and connect the TV to it.
           - On the TV, set the DNS server to {dns_server_ip}, using the TV's manual DNS steps.
-          - Tell Pahra you are done. Pahra links the hotspot's public IP to this TV and checks its DNS log.
+          - Tell QuietNet you are done. QuietNet links the hotspot's public IP to this TV and checks its DNS log.

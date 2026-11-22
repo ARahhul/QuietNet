@@ -1,6 +1,6 @@
-"""A stand-in for AdGuard Home's admin API so Pahra runs end-to-end before the VM exists.
+"""A stand-in for AdGuard Home's admin API so QuietNet runs end-to-end before the VM exists.
 
-Implements the endpoints Pahra uses, evaluates `||domain^$client=...` / `@@` rules
+Implements the endpoints QuietNet uses, evaluates `||domain^$client=...` / `@@` rules
 per client exactly like the real server would for our rule shapes, and generates
 scripted traffic for every persistent client (profile picked from the client name:
 "lg"/"tv" -> LG webOS, "samsung", "fire"/"amazon", "google"/"android-tv", else phone).
@@ -73,6 +73,20 @@ def profile_for(name: str) -> str:
     return "phone"
 
 
+# Generated traffic gets a realistic mix of record types, cache hits and resolvers (tests use the fixed defaults).
+QTYPES = [("A", 58), ("AAAA", 27), ("HTTPS", 11), ("PTR", 2), ("TXT", 1), ("SRV", 1)]
+UPSTREAMS = [("tls://1.1.1.1", 55), ("tls://1.0.0.1", 30), ("https://dns.google/dns-query", 15)]
+
+
+def _variety() -> dict:
+    return {
+        "qtype": random.choices([q for q, _ in QTYPES], [w for _, w in QTYPES])[0],
+        "cached": random.random() < 0.22,
+        "upstream": random.choices([u for u, _ in UPSTREAMS], [w for _, w in UPSTREAMS])[0],
+        "elapsed_ms": random.lognormvariate(3.0, 0.5),
+    }
+
+
 def _ag_time(dt: datetime) -> str:
     # Real AdGuard emits RFC3339 with nanoseconds and a local offset.
     ist = timezone(timedelta(hours=5, minutes=30))
@@ -84,8 +98,9 @@ def _ag_time(dt: datetime) -> str:
 class Rule:
     raw: str
     allow: bool
-    domain: str
+    domain: str  # "*" matches every name (QuietNet's rescue catch-all `||*^`)
     clients: list[str]
+    exclude: list[str] = field(default_factory=list)  # `$client=~'a'|~'b'`: everyone except these
 
 
 def parse_rule(line: str) -> Rule | None:
@@ -98,10 +113,13 @@ def parse_rule(line: str) -> Rule | None:
         return None
     pattern, _, mods = body[2:].partition("$")
     clients: list[str] = []
+    exclude: list[str] = []
     for m in mods.split(","):
         if m.startswith("client="):
-            clients = [c.strip().strip("'\"") for c in m[len("client="):].split("|")]
-    return Rule(line, allow, pattern.rstrip("^").lower(), clients)
+            for c in m[len("client="):].split("|"):
+                c = c.strip()
+                (exclude if c.startswith("~") else clients).append(c.lstrip("~").strip("'\""))
+    return Rule(line, allow, pattern.rstrip("^").lower(), clients, exclude)
 
 
 @dataclass
@@ -120,32 +138,44 @@ class State:
         q = qname.lower().strip(".")
         hits_block, hits_allow = [], []
         for r in self.parsed():
-            if not (q == r.domain or q.endswith("." + r.domain)):
+            if not (r.domain == "*" or q == r.domain or q.endswith("." + r.domain)):
                 continue
             if r.clients and client not in r.clients:
+                continue
+            if client in r.exclude:
                 continue
             (hits_allow if r.allow else hits_block).append(r.raw)
         if hits_allow:
             return False, hits_allow
         return bool(hits_block), hits_block
 
-    def record(self, client: str, qname: str, when: datetime | None = None) -> dict:
+    def record(
+        self,
+        client: str,
+        qname: str,
+        when: datetime | None = None,
+        qtype: str = "A",
+        cached: bool = False,
+        upstream: str = "tls://1.1.1.1",
+        elapsed_ms: float = 1.8,
+    ) -> dict:
         when = when or datetime.now(timezone.utc)
         blocked, rules = self.match(qname, client)
+        cached = cached and not blocked
         entry = {
-            "answer": [] if blocked else [{"type": "A", "value": "203.0.113.%d" % random.randint(1, 254), "ttl": 30}],
-            "cached": False,
+            "answer": [] if blocked else [{"type": qtype, "value": "203.0.113.%d" % random.randint(1, 254), "ttl": 30}],
+            "cached": cached,
             "client": "10.0.0.%d" % (abs(hash(client)) % 250 + 2),
             "client_id": client,
             "client_info": {"name": client, "whois": {}, "disallowed": False, "disallowed_rule": ""},
             "client_proto": "dot",
-            "elapsedMs": "1.8",
-            "question": {"class": "IN", "name": qname, "type": "A"},
+            "elapsedMs": str(round(0.1 if cached else elapsed_ms, 2)),
+            "question": {"class": "IN", "name": qname, "type": qtype},
             "reason": "FilteredBlackList" if blocked else "NotFilteredNotFound",
             "rules": [{"filter_list_id": 0, "text": r} for r in rules],
             "status": "NXDOMAIN" if blocked else "NOERROR",
             "time": _ag_time(when),
-            "upstream": "" if blocked else "tls://1.1.1.1",
+            "upstream": "" if blocked or cached else upstream,
         }
         self.log.insert(0, entry)
         if len(self.log) > 1 and self.log[1]["time"] > entry["time"]:  # back-dated entry: keep newest-first order
@@ -163,7 +193,7 @@ class State:
                     due = now + timedelta(seconds=random.uniform(0, min(period, 15)))
                     self.next_due[key] = due
                 if now >= due:
-                    self.record(name, fqdn, now)
+                    self.record(name, fqdn, now, **_variety())
                     beacon = period <= 25
                     jitter = 0.03 if beacon else 0.15
                     self.next_due[key] = now + timedelta(seconds=period * random.uniform(1 - jitter, 1 + jitter))
