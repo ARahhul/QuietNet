@@ -65,6 +65,9 @@ if [ -n "$lfp" ]; then
   LANGFUSE_BASE_URL="${lfu:-${LANGFUSE_BASE_URL:-https://us.cloud.langfuse.com}}"
 fi
 unset lfp lfs lfu
+# Sign-in with Firebase Authentication (each home its own account). Kept across re-runs; set it with
+#   FIREBASE_PROJECT_ID=<project> bash cloud-secrets.sh <domain>   (empty = access token only)
+FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID:-$(get FIREBASE_PROJECT_ID)}"
 # The VM's public address, as the world sees it through our own DNS name
 VM_IP="$(getent ahostsv4 "$DNS_HOST" | awk 'NR==1{print $1}')"
 [ -n "$VM_IP" ] || VM_IP="$(get VM_IP)"
@@ -81,6 +84,7 @@ LLM_MODEL=$LLM_MODEL
 LANGFUSE_PUBLIC_KEY=$LANGFUSE_PUBLIC_KEY
 LANGFUSE_SECRET_KEY=$LANGFUSE_SECRET_KEY
 LANGFUSE_BASE_URL=$LANGFUSE_BASE_URL
+FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID
 DNS_HOSTNAME=$DNS_HOST
 VM_IP=$VM_IP
 CORS_ORIGINS=https://$DOMAIN,https://quietnet.web.app,http://localhost:5173,http://127.0.0.1:5173
