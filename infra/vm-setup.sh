@@ -17,6 +17,9 @@ fi
 sudo ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
 sudo systemctl restart systemd-resolved
 
+echo "==> Making HTTPS from containers reliable (TCP MSS clamp)"
+bash "$(dirname "$0")/mss-clamp.sh"
+
 echo "==> Opening firewall ports 22, 53, 443, 853 (tcp+udp)"
 if command -v ufw >/dev/null && sudo ufw status | grep -q '^Status: active'; then
   for p in 53 443 853; do sudo ufw allow "$p/tcp"; sudo ufw allow "$p/udp"; done

@@ -104,7 +104,7 @@ export default function Layout() {
   )
 }
 
-function Brand() {
+export function Brand() {
   return (
     <div className="flex items-center gap-2.5">
       <img src="/quietnet-mark.png" alt="" width={32} height={40} className="h-10 w-8 shrink-0" />

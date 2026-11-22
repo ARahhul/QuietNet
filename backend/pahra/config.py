@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
     gemini_batch_size: int = 20
+    # Or any OpenAI-compatible endpoint instead of Gemini (used when both are set), e.g.
+    # LLM_BASE_URL=https://api.aicredits.in/v1  LLM_API_KEY=...  LLM_MODEL=openai/gpt-6-luna
+    llm_base_url: str = ""
+    llm_api_key: str = ""
+    llm_model: str = ""
 
     # Local storage
     db_path: str = "pahra.db"
@@ -44,6 +49,8 @@ class Settings(BaseSettings):
     companion_enabled: bool = True
 
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    # Interactive API docs (/docs, /redoc, /openapi.json). Off on a public server.
+    api_docs: bool = True
 
     @property
     def cache_dir(self) -> Path:

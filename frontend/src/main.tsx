@@ -5,6 +5,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
+import TokenGate from './components/TokenGate'
 import { ToastProvider } from './components/ui'
 import './index.css'
 import Alerts from './pages/Alerts'
@@ -23,21 +24,23 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={qc}>
       <ToastProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route element={<Layout />}>
-              <Route index element={<Suggestions />} />
-              <Route path="live" element={<Live />} />
-              <Route path="blocked" element={<Blocked />} />
-              <Route path="devices" element={<Devices />} />
-              <Route path="devices/:id" element={<DeviceDetail />} />
-              <Route path="setup" element={<Setup />} />
-              <Route path="alerts" element={<Alerts />} />
-              <Route path="report" element={<Report />} />
-              <Route path="settings" element={<Settings />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
+        <TokenGate>
+          <BrowserRouter>
+            <Routes>
+              <Route element={<Layout />}>
+                <Route index element={<Suggestions />} />
+                <Route path="live" element={<Live />} />
+                <Route path="blocked" element={<Blocked />} />
+                <Route path="devices" element={<Devices />} />
+                <Route path="devices/:id" element={<DeviceDetail />} />
+                <Route path="setup" element={<Setup />} />
+                <Route path="alerts" element={<Alerts />} />
+                <Route path="report" element={<Report />} />
+                <Route path="settings" element={<Settings />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        </TokenGate>
       </ToastProvider>
     </QueryClientProvider>
   </StrictMode>,

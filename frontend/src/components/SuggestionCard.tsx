@@ -74,7 +74,7 @@ export default function SuggestionCard({ s, onLater }: { s: Suggestion; onLater:
       {s.sources.length > 0 && (
         <div className="mt-2 text-[11px] text-muted">
           Source: {s.sources.join(' · ')}
-          {s.explained_by === 'gemini' && ' · explained by AI'}
+          {(s.explained_by === 'gemini' || s.explained_by === 'ai') && ' · explained by AI'}
         </div>
       )}
 

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '../api'
+import { api, forgetToken, hasSavedToken } from '../api'
 import { Eyebrow, timeAgo } from '../components/ui'
 
 export default function Settings() {
@@ -50,7 +50,7 @@ export default function Settings() {
         <Row
           label="AI explainer"
           ok={!!h?.llm.enabled && !h.llm.error}
-          detail={h?.llm.enabled ? (h.llm.error ?? `${h.llm.model} · ${h.domains_explained} domains explained`) : 'No GEMINI_API_KEY: using curated + list-based text'}
+          detail={h?.llm.enabled ? (h.llm.error ?? `${h.llm.model} · ${h.domains_explained} domains explained`) : 'No AI key set: using curated + list-based text'}
         />
         <Row
           label="Home companion (TV setup)"
@@ -69,6 +69,18 @@ export default function Settings() {
           />
         )}
       </div>
+
+      {hasSavedToken() && (
+        <div className="card mt-6 flex flex-wrap items-center gap-4 p-5">
+          <div className="min-w-0 flex-1">
+            <div className="font-medium">Access token saved in this browser</div>
+            <div className="mt-1 text-sm text-muted">Forget it on a shared computer. You'll need the token again to sign back in.</div>
+          </div>
+          <button className="btn-ghost" onClick={forgetToken}>
+            Forget token
+          </button>
+        </div>
+      )}
 
       <Eyebrow className="mt-10">
         <span id="credits">Built on</span>

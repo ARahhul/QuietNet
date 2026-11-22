@@ -18,6 +18,7 @@ Steps (each is idempotent):
 import argparse
 import base64
 import json
+import os
 import sys
 import time
 import urllib.error
@@ -66,7 +67,8 @@ def main() -> None:
     p.add_argument("--url", default="http://127.0.0.1:3000")
     p.add_argument("--dns-host", required=True, help="e.g. dns.pahra.app")
     p.add_argument("--user", default="admin")
-    p.add_argument("--password", required=True)
+    # Read from $ADGUARD_PASS when not given, so it doesn't show up in `ps` / shell history on the VM.
+    p.add_argument("--password", default=os.environ.get("ADGUARD_PASS"), required=not os.environ.get("ADGUARD_PASS"))
     p.add_argument("--max-cache-ttl", type=int, default=30)
     p.add_argument("--no-https", action="store_true",
                    help="after harden.sh: Caddy owns :443, so AdGuard must not listen there (DoT :853 stays)")

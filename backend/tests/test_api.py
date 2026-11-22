@@ -24,6 +24,15 @@ def test_requires_token(api):
     assert api.get("/api/devices", params={"token": "dev-token"}).status_code == 200
 
 
+def test_api_docs_can_be_turned_off(settings, fake_app):
+    for docs_on in (True, False):
+        ag = AdGuardClient("http://fake", "a", "b", transport=httpx.ASGITransport(app=fake_app))
+        s = settings.model_copy(update={"api_docs": docs_on})
+        with TestClient(create_app(s, Engine(s, ag=ag), background=False)) as c:
+            codes = [c.get(p).status_code for p in ("/docs", "/redoc", "/openapi.json")]
+        assert codes == ([200] * 3 if docs_on else [404] * 3)
+
+
 async def _drive(api, fake):
     # simulate a poll + pipeline run (background tasks are off in tests)
     obs = await api.engine.poller.poll_once()

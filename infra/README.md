@@ -8,6 +8,8 @@ The VM runs **only AdGuard Home**. Everything else runs on the laptop and reache
 * the dashboard;
 * the TV companion.
 
+Or run the engine on the VM too, so the dashboard works when the laptop is off: see [Run everything on the VM](#run-everything-on-the-vm-cloud-mode).
+
 Time: about 1 hour, most of it waiting for Cloudflare and signing up.
 
 **You need:**
@@ -196,6 +198,33 @@ Each step is safe to re-run. It does the following:
    ```
    After that, only re-run `adguard_init.py` with `--no-https`.
 
+## Run everything on the VM (cloud mode)
+
+AdGuard, the QuietNet engine and Caddy all run on the VM in Docker (`docker-compose.cloud.yml`). The dashboard is hosted on Firebase and talks to `https://api.<domain>`. The laptop isn't needed, except for the TV companion (LAN scan and ADB), which can't run in the cloud. In this mode the TV assistant uses its guided steps.
+
+**DNS records**, all pointing at the VM: `dns`, `*.dns` and `api`.
+
+**One time**, from the laptop:
+```powershell
+.\infra\deploy-azure.ps1                       # uploads backend\ and infra\ to ~/quietnet
+ssh -t -i $HOME\.ssh\quietnet_azure azureuser@<vm-ip> bash quietnet/infra/cloud-secrets.sh <domain>
+```
+`cloud-secrets.sh` asks for the deSEC (or Cloudflare) token and an optional AI key: either Gemini, or any OpenAI-compatible endpoint such as AICredits. Nothing you type is shown. It also generates the AdGuard password and the dashboard's access token on the VM, so they never travel anywhere. Re-run it to change a key; Enter keeps the saved value.
+
+**Start, and after every code change:**
+```powershell
+.\infra\deploy-azure.ps1 -Up
+```
+`cloud-up.sh` gets the wildcard certificate if missing, configures AdGuard (its login page stays hidden behind Caddy), rebuilds the engine, and checks the API and DoH.
+
+**Dashboard:** `frontend\.env.production` points the build at `https://api.<domain>`. If you change that address, change `connect-src` in the Content-Security-Policy in `firebase.json` too, or the dashboard can't reach the API. Build and deploy it:
+```powershell
+cd frontend; npm run build; cd ..; npx firebase-tools deploy --only hosting
+```
+The first time each browser opens the dashboard, it asks for the access token. Read it on the VM with `grep API_TOKEN ~/quietnet/infra/backend.env`. **Settings → Forget token** removes it from that browser.
+
+Don't run `scripts\dev.ps1 -Real` at the same time. Two engines would push rules to the same AdGuard and undo each other.
+
 ## Troubleshooting
 
 | Symptom | Cause and fix |
@@ -208,6 +237,9 @@ Each step is safe to re-run. It does the following:
 | Port 53 answers (NOERROR) instead of REFUSED | The backend isn't running, or `ADGUARD_LOCK_ACCESS=false`. Start the backend and check **Settings → Rule sync** |
 | Tunnel window loops on "Permission denied (publickey)" | Wrong user or key. Oracle uses `ubuntu`; GCP uses your Google username (`-User`); Azure uses `azureuser` with `quietnet_azure` |
 | Azure: SSH or the tunnel times out, but DNS still works | Your home IP changed, so the SSH rule no longer matches it. Re-run `.\infra\azure-vm.ps1` |
+| Cloud mode: the build stalls at `poetry install`, or blocklists never download | HTTPS from containers to Fastly (PyPI, GitHub raw) stalls on Azure. `vm-setup.sh` installs `quietnet-mss-clamp.service`, which fixes it. On an older VM run `bash ~/quietnet/infra/mss-clamp.sh` |
+| Cloud mode: `cloud-up.sh` fails only the `https://api.<domain>` check | The `api` A record is missing or not yet live. Caddy keeps retrying the certificate; re-run `cloud-up.sh` once `dig api.<domain>` shows the VM |
+| Cloud mode: the dashboard keeps asking for the token | The token was copied with a space, or `backend.env` was regenerated. Copy it again with the `grep` above |
 | Settings shows the DNS gateway red | The tunnel is down. Look at the tunnel window, then check `curl.exe -u admin:<pw> http://127.0.0.1:3000/control/status` |
 
 ## How it's put together
@@ -222,6 +254,10 @@ Each step is safe to re-run. It does the following:
 | `tunnel.ps1` | laptop | Auto-reconnecting `ssh -L 3000` |
 | `verify.py` | laptop | DoT, DoH, hidden admin page and closed port 53 checks (replaces kdig and dig on Windows) |
 | `harden.sh`, `docker-compose.harden.yml`, `Caddyfile` | VM | Optional: Caddy in front of :443 so only `/dns-query*` is public |
+| `docker-compose.cloud.yml`, `Caddyfile.cloud` | VM | Cloud mode: AdGuard + the engine (built from `backend/Dockerfile`) + Caddy for `dns.` (DoH) and `api.` |
+| `cloud-secrets.sh`, `cloud-up.sh` | VM | Cloud mode: store the secrets; bring the stack up and check it |
+| `deploy-azure.ps1` | laptop | Cloud mode: upload `backend\` and `infra\` to the VM; `-Up` also runs `cloud-up.sh` |
+| `mss-clamp.sh` | VM | Called by `vm-setup.sh`: keeps HTTPS from containers working on Azure |
 
 ## Gotchas
 

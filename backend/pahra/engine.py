@@ -27,7 +27,12 @@ class Engine:
         self.sync = AdGuardSync(self.conn, self.ag, settings)
         self.lists = self._initial_lists()
         self.clues = ClueFetcher(self.conn, online=not settings.offline_lists)
-        self.explainer = Explainer(settings.gemini_api_key, settings.gemini_model, settings.gemini_batch_size)
+        if settings.llm_api_key and settings.llm_base_url:
+            self.explainer = Explainer(
+                settings.llm_api_key, settings.llm_model, settings.gemini_batch_size, base_url=settings.llm_base_url
+            )
+        else:
+            self.explainer = Explainer(settings.gemini_api_key, settings.gemini_model, settings.gemini_batch_size)
         self.pipeline = Pipeline(self.conn, self.lists, self.clues, self.explainer, self.sync)
         self.poller = Poller(
             self.conn, self.ag, settings.poll_interval_s, self._on_observed, self._on_tick, settings.query_log_hours

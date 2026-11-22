@@ -1,6 +1,33 @@
-export const API_TOKEN: string = import.meta.env.VITE_API_TOKEN ?? 'dev-token'
 // Empty in dev (Vite proxies /api). A hosted build (Firebase) sets VITE_API_BASE to the public backend URL.
 const API_BASE: string = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
+export const apiUrl = (path: string) => `${API_BASE}/api${path}`
+
+// ---------- access token ----------
+// A hosted dashboard must not carry the token in its JavaScript (anyone could read it), so the owner
+// pastes it once per browser and it stays in localStorage. Local dev falls back to the backend's default.
+const TOKEN_KEY = 'quietnet.token'
+const BUILD_TOKEN: string = import.meta.env.VITE_API_TOKEN || (import.meta.env.DEV ? 'dev-token' : '')
+/** Fired when the backend rejects the token, so the app can ask for it again. */
+export const AUTH_EVENT = 'quietnet:auth'
+
+export function getToken(): string {
+  return localStorage.getItem(TOKEN_KEY) || BUILD_TOKEN
+}
+export const hasSavedToken = () => !!localStorage.getItem(TOKEN_KEY)
+export function setToken(token: string) {
+  localStorage.setItem(TOKEN_KEY, token)
+}
+export function forgetToken() {
+  localStorage.removeItem(TOKEN_KEY)
+  window.dispatchEvent(new Event(AUTH_EVENT))
+}
+/** True when the backend accepts this token. */
+export async function checkToken(token: string): Promise<boolean> {
+  const r = await fetch(apiUrl('/settings'), { headers: { Authorization: `Bearer ${token}` } })
+  if (r.ok) return true
+  if (r.status === 401) return false
+  throw new ApiError(r.status, `QuietNet's server answered HTTP ${r.status}`)
+}
 
 export class ApiError extends Error {
   status: number
@@ -13,18 +40,20 @@ export class ApiError extends Error {
 }
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const r = await fetch(`${API_BASE}/api${path}`, {
+  const r = await fetch(apiUrl(path), {
     method,
-    headers: { Authorization: `Bearer ${API_TOKEN}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+    headers: { Authorization: `Bearer ${getToken()}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
   if (r.status === 204) return undefined as T
   const data = await r.json().catch(() => null)
+  if (r.status === 401) forgetToken()
   if (!r.ok) throw new ApiError(r.status, data?.detail ?? data)
   return data as T
 }
 
-export const withToken = (path: string) => `${API_BASE}/api${path}${path.includes('?') ? '&' : '?'}token=${encodeURIComponent(API_TOKEN)}`
+/** For EventSource and plain links, which can't send an Authorization header. */
+export const withToken = (path: string) => `${apiUrl(path)}${path.includes('?') ? '&' : '?'}token=${encodeURIComponent(getToken())}`
 
 // ---------- types ----------
 export type Category = 'ads' | 'tracking' | 'telemetry' | 'needed' | 'malware' | 'unknown'

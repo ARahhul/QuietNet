@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Issue the wildcard certificate needed for DoT ClientIDs (*.dns.<domain>) via DNS-01.
-#   bash issue-cert.sh dns.pahra.app you@example.com
+#   bash issue-cert.sh dns.pahra.app [you@example.com]
+# The email is optional; Let's Encrypt uses it only for expiry warnings (renewal is automatic anyway).
 # The DNS provider is chosen by which credentials file exists:
 #   ~/.secrets/cloudflare.ini   dns_cloudflare_api_token = <token with Zone:DNS:Edit>
-#   ~/.secrets/desec.ini        dns_desec_token = <deSEC token>   (deSEC gives free <name>.dedyn.io domains)
+#   ~/.secrets/desec.ini        dns_desec_token = <deSEC token>
 set -euo pipefail
-DNS_HOST="${1:?usage: issue-cert.sh <dns-hostname e.g. dns.pahra.app> <email>}"
-EMAIL="${2:?usage: issue-cert.sh <dns-hostname> <email>}"
+DNS_HOST="${1:?usage: issue-cert.sh <dns-hostname e.g. dns.pahra.app> [email]}"
+EMAIL="${2:-}"
+if [ -n "$EMAIL" ]; then CONTACT=(-m "$EMAIL"); else CONTACT=(--register-unsafely-without-email); fi
 SECRETS="$HOME/.secrets"
 
 if [ -f "$SECRETS/cloudflare.ini" ]; then
@@ -43,8 +45,8 @@ chmod 600 "$CREDS"
 sudo "$CERTBOT" certonly \
   "${AUTH[@]}" \
   -d "$DNS_HOST" -d "*.$DNS_HOST" \
-  --agree-tos -m "$EMAIL" --non-interactive \
-  --deploy-hook "docker restart pahra-dns-gateway || true"
+  --agree-tos "${CONTACT[@]}" --non-interactive \
+  --deploy-hook "docker restart pahra-dns-gateway pahra-doh-proxy || true"
 
 # AdGuard runs as root in the container but the private key must be readable through the bind mount.
 sudo chmod 0755 /etc/letsencrypt/{live,archive}

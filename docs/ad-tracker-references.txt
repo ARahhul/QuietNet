@@ -1,0 +1,187 @@
+QUIETNET - AD AND TRACKER DOMAIN REFERENCES
+Checked on 22 Nov 2026. Every URL below answered, and every domain in part 3 is on at least one
+of: HaGeZi Pro, the HaGeZi device lists, StevenBlack hosts, Perflyst SmartTV, or DuckDuckGo
+Tracker Radar. A rule on a domain also covers all of its subdomains.
+
+
+1. BLOCKLISTS (lists of domains to block)
+------------------------------------------
+
+Already used by QuietNet:
+- HaGeZi Pro (ads, trackers, telemetry)
+  https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro-onlydomains.txt
+- HaGeZi device lists: native.samsung, native.lgwebos, native.amazon, native.roku, native.xiaomi,
+  native.apple, native.tiktok, native.winoffice (swap the name in the URL)
+  https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/native.samsung-onlydomains.txt
+- HaGeZi Threat Intelligence Feeds (malware, phishing; includes abuse.ch)
+  https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/tif-onlydomains.txt
+- Project home: https://github.com/hagezi/dns-blocklists
+
+Worth adding:
+- OISD big / small (one of the most used combined lists)
+  https://big.oisd.nl/domainswild
+  https://small.oisd.nl/domainswild
+- StevenBlack unified hosts (ads + malware)
+  https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts
+- AdGuard DNS filter (AdGuard Home's default list)
+  https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt
+- Peter Lowe's ad and tracking server list
+  https://pgl.yoyo.org/adservers/serverlist.php?hostformat=nohtml&showintro=0&mimetype=plaintext
+- Perflyst smart TV, Fire TV and Android tracking lists (good for TVs)
+  https://raw.githubusercontent.com/Perflyst/PiHoleBlocklist/master/SmartTV.txt
+  https://raw.githubusercontent.com/Perflyst/PiHoleBlocklist/master/AmazonFireTV.txt
+  https://raw.githubusercontent.com/Perflyst/PiHoleBlocklist/master/android-tracking.txt
+- WindowsSpyBlocker (Windows telemetry)
+  https://raw.githubusercontent.com/crazy-max/WindowsSpyBlocker/master/data/hosts/spy.txt
+- GoodbyeAds (mobile app ads)
+  https://raw.githubusercontent.com/jerryn70/GoodbyeAds/master/Hosts/GoodbyeAds.txt
+- 1Hosts Lite
+  https://raw.githubusercontent.com/badmojr/1Hosts/master/Lite/domains.txt
+- Lightswitch05 ads and tracking (extended)
+  https://www.github.developerdan.com/hosts/lists/ads-and-tracking-extended.txt
+- Phishing Army (phishing)
+  https://phishing.army/download/phishing_army_blocklist.txt
+- Firebog: a curated index of many of the lists above ("ticked" = safe to use)
+  https://v.firebog.net/hosts/lists.php?type=tick
+
+Browser-style lists (contain domains, but most rules are for browsers, not DNS):
+- EasyList        https://easylist.to/easylist/easylist.txt
+- EasyPrivacy     https://easylist.to/easylist/easyprivacy.txt
+
+Note: abuse.ch's own downloads (URLhaus) now need a free Auth-Key; HaGeZi TIF already includes them.
+
+
+2. TRACKER DATABASES (who owns a domain and what it does - context for Gemini)
+-------------------------------------------------------------------------------
+
+- DuckDuckGo Tracker Radar: owner, category and prevalence per domain. QuietNet already uses its
+  blocking file (extension-tds.json).
+  https://github.com/duckduckgo/tracker-radar
+  https://staticcdn.duckduckgo.com/trackerblocking/v6/current/extension-tds.json
+- Disconnect tracking protection: companies grouped by category with their domains
+  https://raw.githubusercontent.com/disconnectme/disconnect-tracking-protection/master/services.json
+- Ghostery TrackerDB / WhoTracks.me: tracker names, companies, categories
+  https://github.com/ghostery/trackerdb
+  https://whotracks.me
+- Exodus Privacy: trackers found inside Android apps (JSON API)
+  https://reports.exodus-privacy.eu.org/api/trackers
+
+
+3. NOTORIOUS DOMAINS (search these in our traffic)
+--------------------------------------------------
+
+Ad networks and ad exchanges
+  doubleclick.net             Google Ads
+  googlesyndication.com       Google AdSense
+  googleadservices.com        Google Ads conversion tracking
+  googletagservices.com       Google ad tags
+  adservice.google.com        Google ads
+  2mdn.net                    Google ad media
+  amazon-adsystem.com         Amazon Ads
+  adnxs.com                   Microsoft (Xandr)
+  criteo.com, criteo.net      Criteo
+  taboola.com                 Taboola
+  outbrain.com                Outbrain
+  pubmatic.com                PubMatic
+  rubiconproject.com          Magnite
+  openx.net                   OpenX
+  adsrvr.org                  The Trade Desk
+  casalemedia.com             Index Exchange
+  smartadserver.com           Equativ (Smart AdServer)
+  bidswitch.net               IPONWEB
+  media.net                   Media.net
+  moatads.com                 Moat (Oracle)
+  advertising.com             Yahoo (formerly AOL)
+  ads.yahoo.com               Yahoo
+  teads.tv                    Teads
+  yieldmo.com                 Yieldmo
+  sharethrough.com            Sharethrough
+  33across.com                33Across
+
+Mobile app ad networks
+  inmobi.com                  InMobi
+  applovin.com                AppLovin
+  unityads.unity3d.com        Unity Ads
+  vungle.com                  Vungle (Liftoff)
+  chartboost.com              Chartboost
+  supersonicads.com           ironSource
+  adcolony.com                AdColony
+
+Analytics, session replay and app attribution
+  google-analytics.com        Google Analytics
+  app-measurement.com         Google Analytics for Firebase (apps)
+  scorecardresearch.com       Comscore
+  quantserve.com              Quantcast
+  hotjar.com                  Hotjar (session replay)
+  clarity.ms                  Microsoft Clarity (session replay)
+  mixpanel.com                Mixpanel
+  api.amplitude.com           Amplitude
+  api.segment.io              Segment
+  appsflyer.com               AppsFlyer (app install tracking)
+  adjust.com                  Adjust (app install tracking)
+  kochava.com                 Kochava (app install tracking)
+
+Social media pixels
+  analytics.tiktok.com        TikTok
+  bat.bing.com                Microsoft Advertising
+  px.ads.linkedin.com         LinkedIn
+  ads-twitter.com             X (Twitter) ads
+  analytics.twitter.com       X (Twitter)
+  tr.snapchat.com             Snapchat
+  connect.facebook.net        Meta pixel - CAUTION: also serves Facebook login and embeds
+  branch.io                   Branch - CAUTION: also opens app links (deep links)
+
+Smart TVs and devices (viewing data, ads, telemetry)
+  samsungads.com              Samsung TV ads
+  samsungacr.com              Samsung TV viewing data (ACR)
+  ads.samsung.com             Samsung ads
+  lgsmartad.com               LG TV ads
+  ad.lgappstv.com             LG TV ads
+  alphonso.tv                 Alphonso (LG) TV viewing data (ACR)
+  samba.tv                    Samba TV viewing data (ACR)
+  ads.roku.com                Roku ads
+  logs.roku.com               Roku logs
+  device-metrics-us.amazon.com, device-metrics-us-2.amazon.com
+                              Amazon Fire TV / Echo metrics
+  tracking.miui.com           Xiaomi tracking
+  data.mistat.xiaomi.com      Xiaomi analytics
+  api.ad.xiaomi.com, sdkconfig.ad.xiaomi.com
+                              Xiaomi ads
+  vortex.data.microsoft.com   Windows telemetry
+  watson.telemetry.microsoft.com
+                              Windows error/telemetry reports
+
+
+4. NEVER BLOCK (things break) - from backend/pahra/data/must_allow.yaml
+-----------------------------------------------------------------------
+
+Time:          pool.ntp.org, time.android.com, time.apple.com, time.windows.com, time.google.com
+Connectivity:  connectivitycheck.gstatic.com, connectivitycheck.android.com, captive.apple.com,
+               msftconnecttest.com, msftncsi.com
+Stores, push:  play.googleapis.com, android.clients.google.com, mtalk.google.com, push.apple.com,
+               apps.apple.com, itunes.apple.com
+Streaming:     netflix.com, nflxvideo.net, nflximg.net, nflxext.com, nflxso.net, youtube.com,
+               googlevideo.com, ytimg.com, primevideo.com, aiv-cdn.net, media-amazon.com,
+               hotstar.com, jiocinema.com, spotify.com
+Messaging:     whatsapp.net, whatsapp.com
+TV updates:    snu.lge.com, time.lge.com, samsungotn.net, time.samsungcloudsolution.com,
+               softwareupdates.amazon.com, atv-ext.amazon.com, api.amazon.com
+Laptops:       windowsupdate.com, update.microsoft.com, swscan.apple.com
+
+
+5. HOW QUIETNET USES THESE TODAY
+--------------------------------
+
+- At startup the engine downloads the HaGeZi lists and DuckDuckGo Tracker Radar, refreshes them
+  daily, and checks every domain a device looks up against them.
+- Gemini gets the list hits and the Tracker Radar owner/category as clues (only the domain name,
+  never which device asked).
+- Confidence is decided by rules, not by Gemini: on 2+ lists, or confirmed by Tracker Radar, or on
+  a threat feed = HIGH; on 1 list = MEDIUM; nothing = LOW.
+- Malware and phishing are always blocked straight away.
+- Ads and trackers at HIGH confidence are blocked straight away when Auto-mode is on (Settings);
+  otherwise they become suggestion cards. The never-block list above always wins.
+- Adding more lists from part 1 (OISD, StevenBlack, Perflyst) means more domains reach HIGH, so
+  Auto-mode blocks more of them without asking.
+
+Before shipping any list inside the product, check that list's license.

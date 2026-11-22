@@ -75,7 +75,7 @@ async def health(e: Engine = Depends(engine)):
         "poller": {"last_poll": e.poller.last_poll, "error": e.poller.last_error, "interval_s": e.poller.interval_s},
         "sync": {"dirty": e.sync.dirty, "last_ok": e.sync.last_ok, "error": e.sync.last_error},
         "lists": e.lists.stats(),
-        "llm": {"enabled": e.explainer.enabled, "model": e.settings.gemini_model, "error": e.explainer.last_error},
+        "llm": {"enabled": e.explainer.enabled, "model": e.explainer.model, "error": e.explainer.last_error},
         "domains_explained": e.conn.execute("SELECT COUNT(*) FROM domains").fetchone()[0],
         "companion": comp.status() if comp else {"enabled": False},
         "forwarder": e.forwarder,

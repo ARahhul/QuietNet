@@ -1,6 +1,6 @@
 import { CheckCircle2, Loader2, Search, ShieldQuestion, Wrench } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { API_TOKEN, withToken } from '../../api'
+import { apiUrl, getToken, withToken } from '../../api'
 import { CopyField, Roll } from '../ui'
 
 /** Event protocol streamed by GET /api/assistant/sessions/{id}/stream (SSE, JSON per message). */
@@ -21,9 +21,9 @@ export type AssistantEvent =
   | { type: 'mode'; mode: 'agent' | 'guided'; note?: string }
 
 async function post(path: string, body: unknown) {
-  const r = await fetch(`/api${path}`, {
+  const r = await fetch(apiUrl(path), {
     method: 'POST',
-    headers: { Authorization: `Bearer ${API_TOKEN}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
   if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.detail ?? `HTTP ${r.status}`)

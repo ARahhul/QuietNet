@@ -21,7 +21,10 @@ path = sys.argv[1]
 with open(path) as f:
     c = yaml.safe_load(f)
 c.setdefault("tls", {})["port_https"] = 0
-c["tls"]["allow_unencrypted_doh"] = True
+if "doh" in (c.get("http") or {}):
+    c["http"]["doh"]["insecure_enabled"] = True  # AdGuard v0.108+/v1
+else:
+    c["tls"]["allow_unencrypted_doh"] = True  # older AdGuard
 proxies = c.setdefault("dns", {}).setdefault("trusted_proxies", ["127.0.0.0/8", "::1"])
 if "172.16.0.0/12" not in proxies:
     proxies.append("172.16.0.0/12")  # Docker's bridge networks
