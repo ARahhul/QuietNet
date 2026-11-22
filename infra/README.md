@@ -14,7 +14,7 @@ Time: about 1 hour, most of it waiting for Cloudflare and signing up.
 
 * A domain name (about ₹100–800 a year).
 * A free Cloudflare account.
-* A cloud account: Oracle Always Free (₹0) or Google Cloud.
+* A cloud account: Oracle Always Free (₹0), Google Cloud, or Azure (student credits work).
 * This laptop, with OpenSSH. It's built into Windows 10 and 11.
 
 Throughout, replace `example.com` with your domain and `203.0.113.10` with your VM's IP.
@@ -63,6 +63,32 @@ Throughout, replace `example.com` with your domain and `203.0.113.10` with your 
     --allow tcp:53,tcp:443,tcp:853,udp:53,udp:443,udp:853
   ```
 * The SSH user is your Google username. Pass it as `-User` to `tunnel.ps1` and `dev.ps1`.
+
+### Option C: Azure (Central India)
+
+`azure-vm.ps1` builds everything from the laptop. It's safe to re-run.
+
+```powershell
+winget install Microsoft.AzureCLI      # then open a new terminal
+az login --use-device-code             # the browser sign-in window doesn't always appear
+.\infra\azure-vm.ps1                   # Standard_B2als_v2 (2 vCPU, 4 GB) in centralindia
+```
+
+**Azure for Students limits regions and sizes.** It only allows a few regions; Central India is one of them. It also blocks the classic B1s and B2s, so the script uses `Standard_B2als_v2`. `-Size Standard_B2ats_v2` (2 vCPU, 1 GB) is cheaper and still enough for AdGuard. To see which sizes your subscription can use:
+
+```powershell
+az vm list-skus -l centralindia --resource-type virtualMachines --query "[?starts_with(name,'Standard_B') && length(restrictions)==``0``].name" -o tsv
+```
+
+It creates the resource group `quietnet-rg` with:
+
+* an Ubuntu 24.04 VM, `quietnet-dns`, with a static public IP. The script prints the IP at the end;
+* a network security group that opens 53, 443 and 853 (TCP and UDP) to everyone, and SSH only to this laptop's current public IP. **It never opens 3000**;
+* a dedicated SSH key, `~\.ssh\quietnet_azure`.
+
+On Azure, the SSH user is `azureuser` and the key is `$HOME\.ssh\quietnet_azure`. In steps 4 and 5, and with `dev.ps1`, use them in place of `ubuntu` and `pahra.key`. For example: `-User azureuser -Key $HOME\.ssh\quietnet_azure`.
+
+**CGNAT moves your home IP now and then.** When SSH or the tunnel starts timing out, re-run `.\infra\azure-vm.ps1`. It points the SSH rule at your new IP and leaves the VM alone.
 
 ## 3. Point the names at the VM (2 min)
 
@@ -180,7 +206,8 @@ Each step is safe to re-run. It does the following:
 | DoT says "certificate verify failed" | The `*.dns` record or the wildcard certificate is missing. Run `sudo certbot certificates` on the VM; it must list `*.dns.example.com` |
 | DoT and DoH return REFUSED | That client id isn't in QuietNet yet. Add the device in the dashboard first: the backend adds it to AdGuard's allowed list |
 | Port 53 answers (NOERROR) instead of REFUSED | The backend isn't running, or `ADGUARD_LOCK_ACCESS=false`. Start the backend and check **Settings → Rule sync** |
-| Tunnel window loops on "Permission denied (publickey)" | Wrong user or key. Oracle uses `ubuntu`; GCP uses your Google username (`-User`) |
+| Tunnel window loops on "Permission denied (publickey)" | Wrong user or key. Oracle uses `ubuntu`; GCP uses your Google username (`-User`); Azure uses `azureuser` with `quietnet_azure` |
+| Azure: SSH or the tunnel times out, but DNS still works | Your home IP changed, so the SSH rule no longer matches it. Re-run `.\infra\azure-vm.ps1` |
 | Settings shows the DNS gateway red | The tunnel is down. Look at the tunnel window, then check `curl.exe -u admin:<pw> http://127.0.0.1:3000/control/status` |
 
 ## How it's put together
@@ -188,6 +215,7 @@ Each step is safe to re-run. It does the following:
 | File | Runs on | Does |
 |---|---|---|
 | `docker-compose.yml` | VM | AdGuard Home. 53/443/853 are public; the admin API is only on 127.0.0.1:3000 |
+| `azure-vm.ps1` | laptop | Azure only: creates the VM, static IP, network security group and SSH key; re-run it to update the SSH rule |
 | `vm-setup.sh` | VM | Docker, certbot and the Cloudflare plugin, frees :53, and opens the OS firewall (handles Oracle's iptables) |
 | `issue-cert.sh` | VM | Wildcard certificate via DNS-01. It renews itself, and the renewal hook restarts AdGuard |
 | `adguard_init.py` | laptop | Configures AdGuard through the API |

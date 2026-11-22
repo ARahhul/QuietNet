@@ -18,7 +18,7 @@ sudo ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
 sudo systemctl restart systemd-resolved
 
 echo "==> Opening firewall ports 22, 53, 443, 853 (tcp+udp)"
-if command -v ufw >/dev/null && sudo ufw status | grep -q active; then
+if command -v ufw >/dev/null && sudo ufw status | grep -q '^Status: active'; then
   for p in 53 443 853; do sudo ufw allow "$p/tcp"; sudo ufw allow "$p/udp"; done
   sudo ufw allow 22/tcp
 fi
@@ -42,6 +42,7 @@ cat <<'EOF'
 Done. Also open 53, 443 and 853 (TCP+UDP) in your cloud provider's firewall:
   - GCP:    VPC network -> Firewall -> allow tcp:53,443,853 udp:53,443,853
   - Oracle: VCN -> Security List -> Ingress rules for the same ports
+  - Azure:  azure-vm.ps1 has already opened them in the network security group
 Do NOT open 3000. The admin API stays on 127.0.0.1 and is reached through the SSH tunnel.
 
 Next: bash issue-cert.sh <dns-hostname> <email>   then   sudo docker compose up -d
