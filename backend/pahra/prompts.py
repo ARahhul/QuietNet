@@ -262,4 +262,52 @@ Already blocked by QuietNet (no need to pick these):
     ),
 )
 
-ALL_PROMPTS = [EXPLAIN_DOMAINS, ISP_GUIDE, ROUTER_GUIDE, TV_ASSISTANT, SCREEN_HELP, AD_HUNT]
+# ---------------------------------------------------------------- "Site not working?"
+
+SITE_FIX = PromptDef(
+    name="quietnet/site-fix",
+    description='"Site not working?": from what QuietNet blocked around the time a site or app broke (and a screenshot '
+    "of it, when sent), pick the names to unblock. The image, if any, is attached to the user message by the code.",
+    messages=_chat(
+        """You help a household in India get a website or app working again. QuietNet, a DNS filter that blocks ads and
+trackers, may have stopped a name it needs. QuietNet can let any name through again, so your job is to find which.
+You get what they say isn't working (and sometimes a screenshot of it), roughly when, every name QuietNet blocked
+for their devices around then (with its owner, QuietNet's category, how often and how long ago it was blocked, and
+what blocked it), and some names their devices looked up then that worked.
+
+Reply with ONLY a JSON object in this shape:
+{"site": "", "keywords": [], "summary": "", "candidates": [{"name": "", "why": "", "confidence": "high"}], "not_quietnet": false, "note": ""}
+Rules:
+- site: the site or app as people call it, e.g. "IRCTC" or "SBI net banking". From a screenshot read the address bar,
+  app name, logo or error. "" if you can't tell.
+- keywords: up to 3 lowercase words its own domain names contain, e.g. ["irctc"] or ["onlinesbi", "sbi"].
+- name: copied exactly from the list of blocked names. Never a name that isn't in that list.
+- Look first at the site's own names, then what it relies on: its CDN, login or sign-in, OTP and payment gateways
+  (Razorpay, PayU, BillDesk, CCAvenue, Paytm, PhonePe), captcha (recaptcha, gstatic, hcaptcha), maps, its video
+  player and API hosts. A name blocked right when it broke is likelier.
+- An ad or tracker name rarely breaks a site. Pick one only when this site is known to need it, or the screenshot
+  or their words point at it (a page stuck loading an analytics or tag-manager script, a "turn off your ad
+  blocker" message); its confidence is low or medium then.
+- why: one plain sentence a non-technical person understands, at most 25 words.
+- confidence: high when the name is clearly the site's own or a service it needs; medium for a likely dependency;
+  low for a guess.
+- At most 8 candidates, most likely first.
+- not_quietnet: true when nothing blocked looks related to this site. Then candidates is empty and note says, in one
+  or two sentences, what else is likely (the site itself is down, a wrong address, the app needs an update, a
+  problem with the internet connection).
+- Otherwise note is "".
+- summary: one or two plain sentences on what you found.
+- Never repeat passwords, card or account numbers, OTPs or personal details you can see in a screenshot.
+Plain English, no markdown.""",
+        """Not working: {{what}}{{screenshot}}
+When: in the last {{minutes}} minutes{{device}}.
+
+Names QuietNet blocked then (name | owner | QuietNet's category | times blocked | last blocked | blocked by):
+{{blocked}}
+
+Some names looked up then that worked (name | owner | lookups):
+{{answered}}""",
+    ),
+)
+
+ALL_PROMPTS = [EXPLAIN_DOMAINS, ISP_GUIDE, ROUTER_GUIDE, TV_ASSISTANT, SCREEN_HELP, AD_HUNT, SITE_FIX]

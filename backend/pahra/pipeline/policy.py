@@ -32,7 +32,9 @@ def apply_policy(conn: sqlite3.Connection, device_id: str, domain: str, qnames: 
     user = conn.execute("SELECT * FROM users WHERE id = ?", (dev["user_id"],)).fetchone()
     sig = dom["signals"] or {}
     mine = active_decision(conn, domain, device_id)
-    household = active_decision(conn, domain, None)
+    household = active_decision(conn, domain, None, dev["user_id"])
+    # The person let it through (e.g. "Site not working?"): nothing automatic blocks it again.
+    let_through = any(d and d["action"] == "allow" for d in (mine, household))
     changed = False
 
     # 1. must-allow: never auto-block, release any quarantine
@@ -44,6 +46,13 @@ def apply_policy(conn: sqlite3.Connection, device_id: str, domain: str, qnames: 
 
     # 2. known malware / phishing: always block for this device + alert
     if dom["category"] == "malware":
+        if let_through:
+            create_alert(
+                conn, user_id=dev["user_id"], device=dev, type_="malware", domain=domain,
+                message=f"Your {dev['name']} reached {domain}, which is on a malware list. You unblocked it, so QuietNet "
+                "let it through. Block it again from Live or Suggestions if that wasn't on purpose.",
+            )
+            return changed
         if not (mine and mine["action"] == "block") and not (household and household["action"] == "block"):
             create_decision(conn, dev["user_id"], domain, "block", device_id=device_id, decided_by="auto")
             changed = True

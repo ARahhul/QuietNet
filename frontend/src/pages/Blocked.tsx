@@ -3,6 +3,7 @@ import { Home, Lock, Search, ShieldOff } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type BlockedDomain } from '../api'
+import SiteFix from '../components/SiteFix'
 import { CategoryChip, DeviceIcon, Empty, FilterChip, Roll, timeAgo, useToast } from '../components/ui'
 
 type Scope = 'all' | 'household' | string // or a device id
@@ -87,6 +88,13 @@ export default function Blocked() {
             />
           </label>
         )}
+      </div>
+
+      <div className="mt-6 max-w-3xl">
+        <SiteFix
+          deviceId={scope !== 'all' && scope !== 'household' ? scope : undefined}
+          deviceName={devices.data?.find((d) => d.id === scope)?.name}
+        />
       </div>
 
       {all.length > 0 && (

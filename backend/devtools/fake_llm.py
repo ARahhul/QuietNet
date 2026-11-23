@@ -11,6 +11,7 @@ Then: LLM_BASE_URL=http://127.0.0.1:3200/v1  LLM_API_KEY=dev  LLM_MODEL=fake-vis
 
 import argparse
 import json
+import re
 
 from fastapi import FastAPI, Request
 
@@ -54,6 +55,28 @@ def _ad_hunt(messages: list) -> dict:
     }
 
 
+def _site_fix(messages: list) -> dict:
+    """Picks the blocked names that contain a word of what isn't working (else the two most recent)."""
+    user = next((m["content"] for m in messages if m.get("role") == "user" and isinstance(m.get("content"), str)), "")
+    if not user:  # with a screenshot the text is the first part of the message
+        parts = next((m["content"] for m in messages if m.get("role") == "user" and isinstance(m.get("content"), list)), [])
+        user = next((p.get("text", "") for p in parts if p.get("type") == "text"), "")
+    what = user.split("Not working:", 1)[-1].splitlines()[0].lower()
+    words = [w for w in re.findall(r"[a-z0-9]{3,}", what) if w not in {"the", "app", "site", "page", "not", "working", "won", "load", "they", "sent", "only", "screenshot"}]
+    blocked = user.split("blocked by):", 1)[-1].split("Some names looked up", 1)[0]
+    names = [line.split(" | ")[0].strip() for line in blocked.splitlines() if " | " in line]
+    picks = [n for n in names if any(w in n for w in words)] or names[:2]
+    site = words[0].upper() if words else "the site in the screenshot"
+    return {
+        "site": site,
+        "keywords": words[:1],
+        "summary": f"{len(picks)} blocked name{'s' if len(picks) != 1 else ''} look like what {site} needs." if picks else "Nothing blocked looks related.",
+        "candidates": [{"name": n, "why": f"{site} loads its pages from here, and it was blocked when it broke.", "confidence": "high"} for n in picks[:4]],
+        "not_quietnet": not picks,
+        "note": "" if picks else "The site itself may be down.",
+    }
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="fake LLM")
 
@@ -66,6 +89,8 @@ def create_app() -> FastAPI:
             answer = SCREEN if _has_image(msgs) else {"screen": "No picture came through.", "steps": []}
         elif "served ads they just saw" in system:
             answer = _ad_hunt(msgs)
+        elif "get a website or app working again" in system:
+            answer = _site_fix(msgs)
         elif "Explain these domains" in json.dumps(msgs):
             answer = {"domains": []}
         else:

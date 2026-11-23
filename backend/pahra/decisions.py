@@ -24,11 +24,15 @@ def _target_client_ids(conn: sqlite3.Connection, user_id: str, device_id: str | 
     return [r["client_id"] for r in rows]
 
 
-def active_decision(conn: sqlite3.Connection, domain: str, device_id: str | None) -> dict | None:
+def active_decision(conn: sqlite3.Connection, domain: str, device_id: str | None, user_id: str | None = None) -> dict | None:
+    """The decision in force for one device, or (device_id None) for a household: pass its user_id, since every
+    home has its own household decisions."""
     if device_id is None:
-        row = conn.execute(
-            "SELECT * FROM decisions WHERE domain = ? AND device_id IS NULL AND undone_at IS NULL", (domain,)
-        ).fetchone()
+        sql = "SELECT * FROM decisions WHERE domain = ? AND device_id IS NULL AND undone_at IS NULL"
+        args: tuple = (domain,)
+        if user_id is not None:
+            sql, args = sql + " AND user_id = ?", (domain, user_id)
+        row = conn.execute(sql, args).fetchone()
     else:
         row = conn.execute(
             "SELECT * FROM decisions WHERE domain = ? AND device_id = ? AND undone_at IS NULL", (domain, device_id)
@@ -78,6 +82,18 @@ def undo_decision(conn: sqlite3.Connection, user_id: str, decision_id: str) -> d
     if d["undone_at"] is None:
         conn.execute("UPDATE decisions SET undone_at = ? WHERE id = ?", (now_iso(), decision_id))
     return get_decision(conn, decision_id)  # type: ignore[return-value]
+
+
+def reinstate(conn: sqlite3.Connection, user_id: str, decision_id: str) -> dict | None:
+    """Put back a decision another one replaced (undoing an unblock restores the block it lifted), unless a newer
+    decision now covers the same domain for the same device or household."""
+    d = get_decision(conn, decision_id)
+    if not d or d["user_id"] != user_id or d["undone_at"] is None:
+        return None
+    if active_decision(conn, d["domain"], d["device_id"], user_id):
+        return None
+    conn.execute("UPDATE decisions SET undone_at = NULL WHERE id = ?", (decision_id,))
+    return get_decision(conn, decision_id)
 
 
 def release_quarantines(conn: sqlite3.Connection, domain: str) -> int:

@@ -172,6 +172,40 @@ export interface AdHunt {
   note: string
 }
 
+/** "Site not working?": a name QuietNet blocked that the site likely needs (see backend pahra.site_fix). */
+export interface SiteCandidate {
+  /** what Unblock lets through: the site's own domain whole when one of your rules blocked all of it, else the exact name */
+  name: string
+  /** the names the site looked up that were blocked */
+  looked_up: string[]
+  owner: string | null
+  category: Category
+  why: string
+  confidence: 'high' | 'medium' | 'low'
+  /** yours: your rule; auto: Auto-mode; held: a hold on a brand-new domain; list: the DNS server's block lists */
+  blocked_by: 'yours' | 'auto' | 'held' | 'list'
+  devices: { id: string; name: string }[]
+  times: number
+  last_seen: string
+  warning: string
+  selected: boolean
+}
+
+export interface SiteFix {
+  what: string
+  site: string
+  minutes: number
+  looked_at: number
+  summary: string
+  candidates: SiteCandidate[]
+  /** nothing blocked looks related: the problem is elsewhere */
+  not_quietnet: boolean
+  note: string
+  /** blocked then, but let through since */
+  already_unblocked: string[]
+  ai: boolean
+}
+
 export interface Suggestion {
   domain: string
   category: Category
@@ -429,7 +463,9 @@ export const api = {
   bulk: (b: { categories?: string[]; device_id?: string | null; min_confidence?: string; domains?: string[] } = {}) =>
     req<{ decisions: Decision[]; count: number; synced: boolean }>('POST', '/decisions/bulk', b),
   undo: (id: string) => req<{ decision: Decision; synced: boolean }>('POST', `/decisions/${id}/undo`),
-  undoBulk: (ids: string[]) => req<{ count: number }>('POST', '/decisions/undo-bulk', { ids }),
+  /** `restore`: decisions the undone ones replaced, to put back (undoing an unblock restores the block it lifted) */
+  undoBulk: (ids: string[], restore: string[] = []) =>
+    req<{ count: number; restored: number }>('POST', '/decisions/undo-bulk', { ids, restore }),
   decisions: () => req<Decision[]>('GET', '/decisions'),
   blocked: () => req<BlockedDomain[]>('GET', '/blocked'),
   alerts: () => req<Alert[]>('GET', '/alerts'),
@@ -450,6 +486,11 @@ export const api = {
   screenshotHelp: (b: ScreenAsk) => req<ScreenAnswer>('POST', '/setup/screenshot', b),
   checkDevice: (id: string) => req<SetupCheck>('POST', `/devices/${id}/check`),
   adHunt: (b: { where: string; minutes: number; device_id?: string | null; note?: string }) => req<AdHunt>('POST', '/ads/hunt', b),
+  siteFix: (b: { what: string; image?: string | null; minutes: number; device_id?: string | null }) =>
+    req<SiteFix>('POST', '/sites/fix', b),
+  /** Let names through for one device or the household, whatever blocked them. Undo: undoBulk(ids, replaced). */
+  siteUnblock: (b: { names: string[]; device_id?: string | null }) =>
+    req<{ decisions: Decision[]; replaced: string[]; count: number; synced: boolean }>('POST', '/sites/unblock', b),
   cgnat: (router_wan_ip: string) =>
     req<{ public_ip: string | null; cgnat: boolean | null; advice: string }>('POST', '/network/cgnat', { router_wan_ip }),
 }

@@ -72,8 +72,9 @@ class Pipeline:
             for ob in by_domain[d]:
                 if is_must_allow(d, self._device_type(ob.device_id), tuple(ob.qnames)):
                     continue
-                if active_decision(self.conn, d, ob.device_id) is None:
-                    dev = self.conn.execute("SELECT user_id FROM devices WHERE id = ?", (ob.device_id,)).fetchone()
+                dev = self.conn.execute("SELECT user_id FROM devices WHERE id = ?", (ob.device_id,)).fetchone()
+                # nothing decided yet for this device or its household (a household unblock must hold, too)
+                if active_decision(self.conn, d, ob.device_id) is None and active_decision(self.conn, d, None, dev["user_id"]) is None:
                     create_decision(self.conn, dev["user_id"], d, "quarantine", ob.device_id, decided_by="auto")
                     quarantined = True
         if quarantined:

@@ -26,6 +26,7 @@ MINUTE, DAY = 60, 86400
 # (allowed, within this many seconds). Every one of a bucket's rules must pass.
 API = ((240, MINUTE),)  # the dashboard sends ~40 a minute with a page open; 240 leaves room for several tabs
 AD_HUNT = ((6, MINUTE), (60, DAY))  # one AI call each, reading up to 160 names
+SITE_FIX = ((6, MINUTE), (40, DAY))  # one AI call each, with a screenshot when one is sent
 SCREENSHOT = ((4, MINUTE), (30, DAY))  # a vision call: the dearest one
 GUIDE = ((6, MINUTE), (40, DAY))  # AI-written router guide (cached afterwards)
 ASSISTANT_START = ((5, MINUTE), (20, DAY))
@@ -36,6 +37,7 @@ BAD_SIGN_IN = (20, MINUTE)  # wrong tokens from one address
 
 _WHAT = {
     "ad_hunt": "ad lookups",
+    "site_fix": "site checks",
     "screenshot": "screenshot reads",
     "guide": "guide requests",
     "assistant_start": "assistant chats",

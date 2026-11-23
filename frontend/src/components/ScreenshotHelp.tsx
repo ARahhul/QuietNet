@@ -2,32 +2,13 @@ import { useMutation } from '@tanstack/react-query'
 import { CheckCircle2, ImagePlus, Loader2, ScanText, TriangleAlert, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type ScreenAnswer } from '../api'
+import { shrink } from '../lib/image'
 import { CopyField, Roll } from './ui'
 
 interface Turn {
   image: string
   question: string
   answer: ScreenAnswer
-}
-
-/** Long edge in pixels: plenty for an AI to read small menu text, small enough to upload quickly. */
-const MAX_EDGE = 1800
-
-/** Any picture -> a JPEG data URL no larger than MAX_EDGE. Also drops EXIF (phone photos carry location). */
-async function shrink(file: Blob): Promise<string> {
-  const bmp = await createImageBitmap(file)
-  const scale = Math.min(1, MAX_EDGE / Math.max(bmp.width, bmp.height))
-  const w = Math.max(1, Math.round(bmp.width * scale))
-  const h = Math.max(1, Math.round(bmp.height * scale))
-  const canvas = document.createElement('canvas')
-  canvas.width = w
-  canvas.height = h
-  const ctx = canvas.getContext('2d')!
-  ctx.fillStyle = '#fff' // transparent PNGs would otherwise turn black
-  ctx.fillRect(0, 0, w, h)
-  ctx.drawImage(bmp, 0, 0, w, h)
-  bmp.close()
-  return canvas.toDataURL('image/jpeg', 0.85)
 }
 
 /**
