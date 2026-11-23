@@ -11,6 +11,7 @@ Then: ADGUARD_URL=http://127.0.0.1:3100
 
 import argparse
 import asyncio
+import base64
 import random
 import time
 from contextlib import asynccontextmanager
@@ -59,6 +60,7 @@ PROFILES: dict[str, list[tuple[str, float]]] = {
         ("metrics.icloud.com", 200), ("www.google.com", 60), ("whatsapp.net", 45),
         ("youtube.com", 50), ("googlevideo.com", 30), ("connectivitycheck.gstatic.com", 120),
         ("news.example-news.in", 90), ("xjq3k9zt7w2p.top", 400),
+        ("www.tiktok.com", 75), ("www.roblox.com", 140),  # what parental controls are for
     ],
 }
 
@@ -95,6 +97,36 @@ def _ag_time(dt: datetime) -> str:
     ist = timezone(timedelta(hours=5, minutes=30))
     s = dt.astimezone(ist).isoformat(timespec="microseconds")
     return s[:-6] + "123" + s[-6:]
+
+
+def _icon(letter: str, color: str) -> str:
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="{color}"/>'
+        f'<text x="12" y="17" font-family="Arial" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">{letter}</text></svg>'
+    )
+    return base64.b64encode(svg.encode()).decode()
+
+
+# A slice of AdGuard's blocked-service catalog (GET /control/blocked_services/all), same shape
+SERVICES: list[dict] = [
+    {"id": sid, "name": name, "group_id": group, "icon_svg": _icon(name[0], color), "rules": [f"||{d}^" for d in domains]}
+    for sid, name, group, color, domains in [
+        ("youtube", "YouTube", "streaming", "#ff0000", ["youtube.com", "googlevideo.com", "ytimg.com", "youtu.be", "youtubei.googleapis.com"]),
+        ("netflix", "Netflix", "streaming", "#e50914", ["netflix.com", "nflxvideo.net", "nflximg.net"]),
+        ("tiktok", "TikTok", "social_network", "#111111", ["tiktok.com", "tiktokv.com", "tiktokcdn.com", "byteoversea.com"]),
+        ("instagram", "Instagram", "social_network", "#c13584", ["instagram.com", "cdninstagram.com"]),
+        ("facebook", "Facebook", "social_network", "#1877f2", ["facebook.com", "fbcdn.net", "facebook.net"]),
+        ("snapchat", "Snapchat", "social_network", "#fffc00", ["snapchat.com", "sc-cdn.net"]),
+        ("discord", "Discord", "messenger", "#5865f2", ["discord.com", "discord.gg", "discordapp.com"]),
+        ("roblox", "Roblox", "gaming", "#222222", ["roblox.com", "rbxcdn.com"]),
+        ("fortnite", "Fortnite", "gaming", "#2b2b6b", ["fortnite.com", "epicgames.com"]),
+        ("minecraft", "Minecraft", "gaming", "#62b47a", ["minecraft.net", "mojang.com"]),
+        ("dream11", "Dream11", "gambling", "#d1131c", ["dream11.com"]),
+    ]
+] + [{"id": "9gag", "name": "9GAG", "group_id": "social_network", "icon_svg": _icon("9", "#000"), "rules": ["||9gag.com^", "/odd-rule/"]}]
+SERVICE_GROUPS = [{"id": g} for g in ("gambling", "gaming", "messenger", "social_network", "streaming")]
+ADULT = {"adult.example", "xxx.example"}  # what AdGuard's adult-site filter blocks here
+SAFE_SEARCH = {"google.com", "www.google.com", "bing.com", "www.bing.com", "youtube.com", "www.youtube.com", "duckduckgo.com"}
 
 
 @dataclass
@@ -155,9 +187,10 @@ class State:
         self.filter_domains[f["id"]] = domains
         f["rules_count"] = len(domains)
 
-    def match_detail(self, qname: str, client: str) -> tuple[bool, list[tuple[str, int]]]:
-        """(blocked, [(rule text, filter_list_id)]). Custom rules are filter 0. AdGuard's order, highest first:
-        important allow > important block > allow > block (custom rules and the filter lists alike)."""
+    def verdict(self, qname: str, client: str) -> tuple[str, list[tuple[str, int]]]:
+        """(AdGuard's reason, [(rule text, filter_list_id)] that decided it). Custom rules are filter 0. As in AdGuard:
+        important allow > important block > allow > block (custom rules and filter lists alike); an allow skips the
+        client's adult-site filter and SafeSearch, which come last."""
         q = qname.lower().strip(".")
         hits: list[Rule] = []
         for r in self.parsed():
@@ -170,9 +203,9 @@ class State:
             hits.append(r)
         for important in (True, False):
             if allows := [(r.raw, 0) for r in hits if r.allow and r.important == important]:
-                return False, allows
+                return "NotFilteredAllowList", allows
             if important and (blocks := [(r.raw, 0) for r in hits if not r.allow and r.important]):
-                return True, blocks
+                return "FilteredBlackList", blocks
         hits_block = [(r.raw, 0) for r in hits if not r.allow]
         labels = q.split(".")
         names = [".".join(labels[i:]) for i in range(len(labels))]
@@ -182,7 +215,19 @@ class State:
             hit = next((n for n in names if n in self.filter_domains.get(f["id"], ())), None)
             if hit:
                 hits_block.append((f"||{hit}^", f["id"]))
-        return bool(hits_block), hits_block
+        if hits_block:
+            return "FilteredBlackList", hits_block
+        c = self.clients.get(client) or {}
+        if c.get("use_global_settings") is False:
+            if c.get("parental_enabled") and any(q == d or q.endswith("." + d) for d in ADULT):
+                return "FilteredParental", []
+            if (c.get("safe_search") or {}).get("enabled") and q in SAFE_SEARCH:
+                return "FilteredSafeSearch", []
+        return "NotFilteredNotFound", []
+
+    def match_detail(self, qname: str, client: str) -> tuple[bool, list[tuple[str, int]]]:
+        reason, hits = self.verdict(qname, client)
+        return reason in ("FilteredBlackList", "FilteredParental"), hits
 
     def match(self, qname: str, client: str) -> tuple[bool, list[str]]:
         blocked, hits = self.match_detail(qname, client)
@@ -199,7 +244,8 @@ class State:
         elapsed_ms: float = 1.8,
     ) -> dict:
         when = when or datetime.now(timezone.utc)
-        blocked, rules = self.match_detail(qname, client)
+        reason, rules = self.verdict(qname, client)
+        blocked = reason in ("FilteredBlackList", "FilteredParental")
         cached = cached and not blocked
         entry = {
             "answer": [] if blocked else [{"type": qtype, "value": "203.0.113.%d" % random.randint(1, 254), "ttl": 30}],
@@ -210,7 +256,7 @@ class State:
             "client_proto": "dot",
             "elapsedMs": str(round(0.1 if cached else elapsed_ms, 2)),
             "question": {"class": "IN", "name": qname, "type": qtype},
-            "reason": "FilteredBlackList" if blocked else "NotFilteredNotFound",
+            "reason": reason,
             "rules": [{"filter_list_id": fid, "text": r} for r, fid in rules],
             "status": "NXDOMAIN" if blocked else "NOERROR",
             "time": _ag_time(when),
@@ -319,9 +365,12 @@ def create_app(seed_clients: list[str] | None = None, generate: bool = True) -> 
 
     @app.get("/control/filtering/check_host")
     async def check_host(name: str, client: str = ""):
-        blocked, rules = state.match_detail(name, client)
-        return {"reason": "FilteredBlackList" if blocked else "NotFilteredNotFound",
-                "rules": [{"text": r, "filter_list_id": fid} for r, fid in rules]}
+        reason, rules = state.verdict(name, client)
+        return {"reason": reason, "rules": [{"text": r, "filter_list_id": fid} for r, fid in rules]}
+
+    @app.get("/control/blocked_services/all")
+    async def blocked_services_all():
+        return {"blocked_services": SERVICES, "groups": SERVICE_GROUPS}
 
     @app.get("/control/clients")
     async def clients():

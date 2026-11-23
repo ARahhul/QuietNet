@@ -267,3 +267,26 @@ def test_another_homes_household_rules_dont_count(conn, user_id, add_device):
 def test_keywords_name_the_site():
     assert site_fix.keywords("IRCTC payment page won't load") == ["irctc"]
     assert site_fix.keywords("https://www.onlinesbi.sbi login not working") == ["onlinesbi", "sbi"]
+
+
+def test_parental_blocks_are_not_offered_and_cant_be_unblocked_per_device(make):
+    c, calls, eng, dev = make(ai=False)
+    lookups(eng, dev, [
+        ("www.tiktok.com", "tiktok.com", "blocked", 40, "parental"),
+        ("checkout.razorpay.com", "razorpay.com", "blocked", 30, "list"),
+    ])
+    got = c.post("/api/sites/fix", headers=H, json={"what": "tiktok", "minutes": 15, "device_id": dev["id"]}).json()
+    assert [x["name"] for x in got["candidates"]] == ["checkout.razorpay.com"]
+    assert got["parental"] == ["www.tiktok.com"]
+
+    r = c.post("/api/sites/unblock", headers=H, json={"names": ["www.tiktok.com"], "device_id": dev["id"]})
+    assert r.status_code == 409 and "Parental page" in r.json()["detail"]
+    # for the household it goes ahead: an allow can't lift a parental block, but it frees other devices
+    assert c.post("/api/sites/unblock", headers=H, json={"names": ["www.tiktok.com"]}).status_code == 201
+
+
+def test_only_parental_blocks_says_so(make):
+    c, calls, eng, dev = make(ai=False)
+    lookups(eng, dev, [("www.roblox.com", "roblox.com", "blocked", 40, "parental")])
+    got = c.post("/api/sites/fix", headers=H, json={"what": "roblox", "minutes": 15}).json()
+    assert got["candidates"] == [] and got["parental"] == ["www.roblox.com"] and "Parental page" in got["summary"]

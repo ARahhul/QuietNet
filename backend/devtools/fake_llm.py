@@ -77,6 +77,21 @@ def _site_fix(messages: list) -> dict:
     }
 
 
+# Names the fake game check calls games (the real model knows them)
+GAME_WORDS = ("game", "garena", "freefire", "pubg", "krafton", "supercell", "clash", "valorant", "riot", "steam")
+
+
+def _game_check(messages: list) -> dict:
+    user = next((m["content"] for m in messages if m.get("role") == "user" and isinstance(m.get("content"), str)), "")
+    items = json.loads(user.split("Domains:", 1)[-1].strip() or "[]")
+    out = []
+    for x in items:
+        d = x["domain"]
+        hit = next((w for w in GAME_WORDS if w in d), None)
+        out.append({"domain": d, "game": hit is not None, "name": d.split(".")[0].title() if hit else ""})
+    return {"domains": out}
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="fake LLM")
 
@@ -91,6 +106,8 @@ def create_app() -> FastAPI:
             answer = _ad_hunt(msgs)
         elif "get a website or app working again" in system:
             answer = _site_fix(msgs)
+        elif "mainly for games" in system:
+            answer = _game_check(msgs)
         elif "Explain these domains" in json.dumps(msgs):
             answer = {"domains": []}
         else:

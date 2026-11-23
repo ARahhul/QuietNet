@@ -56,6 +56,32 @@ Reply with ONLY a JSON object, no other text, in this shape:
     ),
 )
 
+# ---------------------------------------------------------------- Parental controls: is it a game?
+
+GAME_CHECK = PromptDef(
+    name="quietnet/game-check",
+    description="Parental controls (Block games): which of these domains exist mainly for video games.",
+    config={"temperature": 0},
+    messages=_chat(
+        """You help parents block video games on their children's devices by deciding which internet domains exist
+mainly for games. Each domain comes with what is already known about it (category, owner, a one-line purpose) when known.
+game = true only for domains whose main purpose is playing games:
+- game servers, matchmaking and game APIs (e.g. a game's own backend), game launchers and game stores
+  (Steam, Epic Games, Riot, Battle.net, Roblox, Garena, Krafton), console gaming networks,
+  browser and mobile game sites, and studios' domains that serve their games.
+game = false for everything else, including:
+- app stores, operating systems, device updates, CDNs and cloud hosting shared by many apps;
+- ads, analytics and crash reporting, even when games use them (Unity Ads, AppLovin, Firebase);
+- video, music and live streaming (YouTube, Twitch), chat (Discord, WhatsApp), social networks, search, shopping, news;
+- anything you are not sure about.
+name: the game or company when game is true (e.g. "Free Fire (Garena)"), else "".
+
+Reply with ONLY a JSON object, no other text, in this shape:
+{"domains": [{"domain": "...", "game": true, "name": "..."}]}""",
+        "Domains:\n{{domains}}",
+    ),
+)
+
 # ---------------------------------------------------------------- Setup → Home WiFi
 
 ISP_GUIDE = PromptDef(
@@ -310,4 +336,4 @@ Some names looked up then that worked (name | owner | lookups):
     ),
 )
 
-ALL_PROMPTS = [EXPLAIN_DOMAINS, ISP_GUIDE, ROUTER_GUIDE, TV_ASSISTANT, SCREEN_HELP, AD_HUNT, SITE_FIX]
+ALL_PROMPTS = [EXPLAIN_DOMAINS, GAME_CHECK, ISP_GUIDE, ROUTER_GUIDE, TV_ASSISTANT, SCREEN_HELP, AD_HUNT, SITE_FIX]

@@ -3,7 +3,7 @@ import { LogIn, LogOut, UserRound } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { CREDITS } from '../lib/credits'
-import { Eyebrow, Roll, timeAgo } from '../components/ui'
+import { Eyebrow, Roll, Toggle, timeAgo } from '../components/ui'
 import { firebaseEnabled, signOut, useSession } from '../session'
 
 export default function Settings() {
@@ -34,7 +34,7 @@ export default function Settings() {
             The rest wait in Suggestions. You get a notification and can undo any time.
           </div>
         </div>
-        <Switch label="Auto-mode" on={!!s?.auto_mode} onClick={() => s && patch.mutate({ auto_mode: !s.auto_mode })} />
+        <Toggle checked={!!s?.auto_mode} onChange={(on) => s && patch.mutate({ auto_mode: on })} label="Auto-mode" />
       </div>
 
       <div className="card mt-4 flex items-center gap-4 p-5">
@@ -54,13 +54,13 @@ export default function Settings() {
             <div className="mt-2 text-xs text-muted">Saved. The DNS server picks it up as soon as it answers again.</div>
           )}
         </div>
-        <Switch
+        <Toggle
           label="Block known ads & trackers"
-          on={!!s?.shared_blocklist}
-          onClick={() => {
+          checked={!!s?.shared_blocklist}
+          onChange={(on) => {
             if (!s) return
-            if (s.shared_blocklist && !confirm('Stop blocking known ads and trackers for your home? Your own blocks keep working.')) return
-            patch.mutate({ shared_blocklist: !s.shared_blocklist })
+            if (!on && !confirm('Stop blocking known ads and trackers for your home? Your own blocks keep working.')) return
+            patch.mutate({ shared_blocklist: on })
           }}
         />
       </div>
@@ -148,20 +148,6 @@ export default function Settings() {
 }
 
 // The cloud DNS stack in infra/ and the data the engine classifies with (see README, Credits).
-
-function Switch({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {
-  return (
-    <button
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      onClick={onClick}
-      className={`relative h-7 w-12 shrink-0 rounded-full border transition ${on ? 'border-brand bg-brand' : 'border-line bg-panel-2'}`}
-    >
-      <span className={`absolute top-[3px] h-5 w-5 rounded-full bg-white transition-all ${on ? 'left-[23px]' : 'left-[3px]'}`} />
-    </button>
-  )
-}
 
 function Row({ label, ok, detail }: { label: string; ok?: boolean; detail?: string | null }) {
   return (

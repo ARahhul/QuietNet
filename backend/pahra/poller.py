@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable
 
 from .adguard.client import AdGuardClient, AdGuardError
+from .adguard.rules import is_parental_rule
 from .db import get_meta, set_meta
 from .events import ingest_event
 from .pipeline.normalize import normalize_domain
@@ -151,7 +152,7 @@ class Poller:
             if not qname:
                 continue
             domain = normalize_domain(qname)
-            blocked = str(e.get("reason", "")).startswith("Filtered")
+            blocked = is_blocked(e)
             gap = ingest_event(self.conn, dev, domain, e["_t"], blocked)
             log_query(self.conn, dev, qname, domain, e, blocked, blocklist_id)
             ob = observed.setdefault((dev, domain), Observed(dev, domain))
@@ -168,21 +169,35 @@ class Poller:
         return list(observed.values())
 
 
+def is_blocked(e: dict) -> bool:
+    """AdGuard's "Filtered…" reasons, except SafeSearch: that answers with the search engine's safe address."""
+    reason = str(e.get("reason", ""))
+    return reason.startswith("Filtered") and reason != "FilteredSafeSearch"
+
+
+def blocked_by_of(e: dict, blocklist_id: str | None = None) -> str:
+    """parental (parental controls) | rule (one of the home's QuietNet rules) | blocklist (QuietNet's block list) |
+    list (any other filter: threat intelligence the operator added)."""
+    if e.get("reason") == "FilteredParental":
+        return "parental"
+    rules = e.get("rules") or []
+    # rules from filter_list_id 0 are AdGuard's custom rules, which only QuietNet writes
+    custom = [(r or {}).get("text") or "" for r in rules if not (r or {}).get("filter_list_id")]
+    if any(is_parental_rule(t) for t in custom):
+        return "parental"
+    if custom:
+        return "rule"
+    ids = [str((r or {}).get("filter_list_id") or 0) for r in rules]
+    return "blocklist" if blocklist_id and blocklist_id in ids else "list"
+
+
 def log_query(
     conn: sqlite3.Connection, device_id: str, qname: str, domain: str, e: dict, blocked: bool, blocklist_id: str | None = None
 ) -> None:
     """Keep one AdGuard query-log entry for the live view and the report charts."""
     if blocked:
         status = "blocked"
-        # rules from filter_list_id 0 are AdGuard's custom rules, which only QuietNet writes; QuietNet's block list is
-        # its own filter (pahra.blocklist); any other filter is a list the operator added (threat intelligence)
-        ids = [str((r or {}).get("filter_list_id") or 0) for r in (e.get("rules") or [])]
-        if "0" in ids:
-            blocked_by = "rule"
-        elif blocklist_id and blocklist_id in ids:
-            blocked_by = "blocklist"
-        else:
-            blocked_by = "list"
+        blocked_by = blocked_by_of(e, blocklist_id)
     else:
         status = "cached" if e.get("cached") else "allowed"
         blocked_by = None

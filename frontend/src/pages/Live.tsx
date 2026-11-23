@@ -23,11 +23,18 @@ const RESULT: Record<string, { label: string; sub?: string; title: string; color
   rule: { label: 'Blocked', title: 'Blocked by one of your QuietNet rules', color: DATA.blocked },
   blocklist: { label: 'Blocked', sub: 'Known ad/tracker', title: "Blocked for every home by QuietNet's ad & tracker list", color: DATA.blocked },
   list: { label: 'Blocked', sub: 'Threat list', title: 'Blocked by a threat-intelligence list on the DNS server', color: DATA.blocked },
+  parental: { label: 'Blocked', sub: 'Parental controls', title: 'Blocked by parental controls (change them on the Parental page)', color: DATA.blocked },
   cached: { label: 'From cache', title: 'Allowed, answered from the DNS server’s cache', color: DATA.cached },
   allowed: { label: 'Allowed', title: 'Allowed, answered by the upstream resolver', color: DATA.allowed },
 }
 const result = (r: LiveQuery) =>
-  RESULT[r.status === 'blocked' ? (r.blocked_by === 'list' || r.blocked_by === 'blocklist' ? r.blocked_by : 'rule') : r.status]
+  RESULT[
+    r.status === 'blocked'
+      ? r.blocked_by === 'list' || r.blocked_by === 'blocklist' || r.blocked_by === 'parental'
+        ? r.blocked_by
+        : 'rule'
+      : r.status
+  ]
 
 interface IpGroup {
   key: string

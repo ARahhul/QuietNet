@@ -16,6 +16,7 @@ import Devices from './pages/Devices'
 import Landing from './pages/Landing'
 import Live from './pages/Live'
 import Login from './pages/Login'
+import Parental from './pages/Parental'
 import Report from './pages/Report'
 import Settings from './pages/Settings'
 import Setup from './pages/Setup'
@@ -66,6 +67,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="devices" element={<Devices />} />
                 <Route path="devices/:id" element={<DeviceDetail />} />
                 <Route path="setup" element={<Setup />} />
+                <Route path="parental" element={<Parental />} />
                 <Route path="alerts" element={<Alerts />} />
                 <Route path="report" element={<Report />} />
                 <Route path="settings" element={<Settings />} />

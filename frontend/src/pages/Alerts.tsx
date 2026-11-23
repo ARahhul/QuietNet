@@ -11,6 +11,7 @@ const TITLE: Record<string, string> = {
   acr_tracker: 'Your TV is watching you',
   new_tracker: 'Blocked automatically',
   home_address: 'Home address followed',
+  game: 'Game blocked',
 }
 
 export default function Alerts() {

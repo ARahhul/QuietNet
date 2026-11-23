@@ -92,8 +92,10 @@ class AdGuardClient:
         return list((data or {}).get("clients") or [])
 
     @staticmethod
-    def _client_body(name: str, ids: list[str]) -> dict:
-        return {
+    def _client_body(name: str, ids: list[str], parental: dict | None = None) -> dict:
+        """`parental` (pahra.parental.client_settings): adult-site filter and SafeSearch for this client only. Without
+        it the client follows AdGuard's global settings, as every client did before parental controls."""
+        body = {
             "name": name,
             "ids": ids,
             "use_global_settings": True,
@@ -105,12 +107,37 @@ class AdGuardClient:
             "upstreams": [],
             "tags": [],
         }
+        if parental:
+            body |= {
+                "use_global_settings": False,
+                "parental_enabled": bool(parental["parental_enabled"]),
+                "safe_search": dict(parental["safe_search"]),
+            }
+        return body
 
-    async def add_client(self, name: str, ids: list[str]) -> None:
-        await self._post("/control/clients/add", self._client_body(name, ids))
+    async def add_client(self, name: str, ids: list[str], parental: dict | None = None) -> None:
+        await self._post("/control/clients/add", self._client_body(name, ids, parental))
 
-    async def update_client(self, name: str, ids: list[str]) -> None:
-        await self._post("/control/clients/update", {"name": name, "data": self._client_body(name, ids)})
+    async def update_client(self, name: str, ids: list[str], parental: dict | None = None) -> None:
+        await self._post("/control/clients/update", {"name": name, "data": self._client_body(name, ids, parental)})
+
+    @staticmethod
+    def client_matches(cur: dict, ids: list[str], parental: dict | None) -> bool:
+        """Does AdGuard's client `cur` already have these ids and parental settings?"""
+        if sorted(cur.get("ids") or []) != sorted(ids):
+            return False
+        if parental is None:
+            return cur.get("use_global_settings", True) is not False
+        if cur.get("use_global_settings") is not False or bool(cur.get("parental_enabled")) != parental["parental_enabled"]:
+            return False
+        ss = cur.get("safe_search") or {}
+        return all(bool(ss.get(k)) == v for k, v in parental["safe_search"].items())
+
+    # --- blocked services (the app catalog parental controls pick from) ---
+    async def blocked_services_all(self) -> list[dict]:
+        """[{id, name, icon_svg (base64), rules: ["||tiktok.com^", ...], group_id}] (group_id: AdGuard ≥ 0.107.44)."""
+        data = await self._get("/control/blocked_services/all")
+        return list((data or {}).get("blocked_services") or [])
 
     async def delete_client(self, name: str) -> None:
         await self._post("/control/clients/delete", {"name": name})

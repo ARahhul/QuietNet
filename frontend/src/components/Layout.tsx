@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Activity, Ban, Bell, ChartColumn, Cpu, LogOut, Plus, Settings, ShieldCheck, UserRound } from 'lucide-react'
+import { Activity, Baby, Ban, Bell, ChartColumn, Cpu, LogOut, Plus, Settings, ShieldCheck, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { api } from '../api'
@@ -7,10 +7,11 @@ import { signOut, takeMovedHome, useSession } from '../session'
 import { Roll, useToast } from './ui'
 
 const NAV = [
-  { to: '/', label: 'Suggestions', icon: ShieldCheck, end: true },
+  { to: '/', label: 'Suggestions', short: 'Suggested', icon: ShieldCheck, end: true }, // short: the phone tab bar's label
   { to: '/live', label: 'Live', icon: Activity },
   { to: '/blocked', label: 'Blocked', icon: Ban },
   { to: '/devices', label: 'Devices', icon: Cpu },
+  { to: '/parental', label: 'Parental', icon: Baby },
   { to: '/alerts', label: 'Alerts', icon: Bell },
   { to: '/report', label: 'Report', icon: ChartColumn },
   { to: '/settings', label: 'Settings', icon: Settings, mobileHeader: true }, // phones: a gear in the header, not a tab
@@ -105,18 +106,18 @@ export default function Layout() {
         </main>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-line bg-ink/95 backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-7 border-t border-line bg-ink/95 backdrop-blur md:hidden">
         {NAV.filter((n) => !n.mobileHeader).map((n) => (
           <NavLink
             key={n.to}
             to={n.to}
             end={n.end}
             className={({ isActive }) =>
-              `relative flex min-w-0 flex-col items-center gap-1 py-2.5 text-[10px] ${isActive ? 'text-white' : 'text-muted'}`
+              `relative flex min-w-0 flex-col items-center gap-1 py-2.5 text-[9px] tracking-tight ${isActive ? 'text-white' : 'text-muted'}`
             }
           >
             <n.icon className="h-5 w-5" strokeWidth={1.75} />
-            {n.label}
+            <span className="max-w-full truncate">{n.short ?? n.label}</span>
             {n.to === '/alerts' && unread > 0 && <span className="absolute top-1.5 left-1/2 ml-2 h-2 w-2 rounded-full bg-brand" />}
           </NavLink>
         ))}

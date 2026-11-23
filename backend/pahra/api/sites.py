@@ -62,6 +62,8 @@ async def unblock(body: UnblockIn, e: Engine = Depends(engine)):
         get_device(e, body.device_id)
     try:
         out = site_fix.unblock(e.conn, e.user_id, body.names, body.device_id)
+    except site_fix.ParentalBlock as ex:
+        raise HTTPException(409, str(ex)) from None
     except (DecisionError, ValueError) as ex:
         raise HTTPException(422, str(ex)) from None
     return out | {"count": len(out["decisions"]), "synced": await _push(e)}

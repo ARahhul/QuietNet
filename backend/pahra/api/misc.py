@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 import httpx
 
+from .. import parental
 from ..adguard.client import AdGuardError
 from ..db import rows_to_dicts
 from ..engine import Engine
@@ -43,6 +44,7 @@ async def report(e: Engine = Depends(engine)):
 class SettingsPatch(BaseModel):
     auto_mode: bool | None = None
     shared_blocklist: bool | None = None  # QuietNet's ad & tracker list for this home (on unless switched off)
+    time_zone: str | None = None  # IANA name, e.g. "Asia/Kolkata": the clock parental-control bedtimes follow
 
 
 def _settings(e: Engine) -> dict:
@@ -51,6 +53,7 @@ def _settings(e: Engine) -> dict:
         "email": u["email"],
         "auto_mode": bool(u["auto_mode"]),
         "shared_blocklist": bool(u["shared_blocklist"]),
+        "time_zone": u["time_zone"] or parental.DEFAULT_TIME_ZONE,
         "dns_hostname": e.settings.dns_hostname,
         "vm_ip": e.settings.vm_ip,
     }
@@ -77,6 +80,16 @@ async def patch_settings(body: SettingsPatch, e: Engine = Depends(engine)):
                 synced = True
             except AdGuardError:
                 synced = False  # the sync loop retries
+    if body.time_zone is not None:
+        try:
+            tz = parental.validate_time_zone(body.time_zone.strip())
+        except ValueError as ex:
+            raise HTTPException(422, str(ex)) from None
+        e.conn.execute("UPDATE users SET time_zone = ? WHERE id = ?", (tz, e.user_id))
+        try:
+            await e.sync.sync_all()  # bedtimes now start and end on this clock
+        except AdGuardError:
+            pass
     return _settings(e) | ({"synced": synced} if synced is not None else {})
 
 

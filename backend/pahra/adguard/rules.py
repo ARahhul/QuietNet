@@ -116,6 +116,51 @@ def is_rescue_catch_all(rule: str) -> bool:
     return rule.startswith("||*^$client=~'")
 
 
+# --- parental controls ---------------------------------------------------------------------------------------------
+# Parental rules carry `important` too, written first (`$important,client=...`), which is how the query log tells a
+# parent's block from the home's own rules (`$client=...,important`); AdGuard reads modifiers in any order. A home's
+# allows are `@@...$important` and would outrank them, so AdGuardSync leaves a device out of any allow that would undo
+# what its parental controls block (AdGuardSync.desired_rules, parental.held).
+PARENTAL_MARK = "$important,client="
+
+
+def _scope(client_ids: list[str]) -> str:
+    if not client_ids:
+        raise RuleSecurityError("SECURITY VIOLATION: Never push a global rule without $client!")
+    ids = sorted({validate_client_id(c) for c in client_ids})
+    return PARENTAL_MARK + "|".join(f"'{cid}'" for cid in ids)
+
+
+def build_parental_rule(domain: str, client_ids: list[str]) -> str:
+    """Block `domain` (and its subdomains) for these devices, whatever allows they have."""
+    return f"||{validate_domain(domain)}^{_scope(client_ids)}"
+
+
+def internet_off_rules(client_ids: list[str], essentials: list[str]) -> list[str]:
+    """Bedtime "internet off": block every name for these devices except the essentials (calls, clocks, the OS
+    checking it's online), which an `important` allow lets through."""
+    scope = _scope(client_ids)
+    return [f"||*^{scope}", *(f"@@||{validate_domain(n)}^{scope}" for n in sorted(set(essentials)))]
+
+
+def is_parental_rule(rule: str) -> bool:
+    return PARENTAL_MARK in rule
+
+
+_SERVICE_RULE_RE = re.compile(r"^\|\|([a-z0-9_.-]+)\^$")
+
+
+def service_domains(rules: list[str]) -> list[str]:
+    """The domains in one of AdGuard's blocked-service definitions (`||tiktok.com^` ...). Anything else (wildcards,
+    modifiers) is skipped: we only write rule shapes we can scope and check."""
+    out: list[str] = []
+    for r in rules:
+        m = _SERVICE_RULE_RE.match((r or "").strip().lower())
+        if m and DOMAIN_RE.match(m.group(1)):
+            out.append(m.group(1))
+    return sorted(set(out))
+
+
 def compile_section(rules: list[str], rescue: list[str] | None = None) -> list[str]:
     """Deterministic, de-duplicated QuietNet-managed block of user rules (rescue rules first)."""
     body = sorted(set(rules))

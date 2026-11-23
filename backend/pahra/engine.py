@@ -13,7 +13,7 @@ from .auth import FirebaseVerifier
 from .blocklist import BlocklistIndex, write_adguard_file
 from .config import Settings
 from .db import ensure_seed_user, init_sqlite_wal
-from . import home_address
+from . import games, home_address
 from .events import purge_old_events
 from .pipeline.clues import ClueFetcher
 from .pipeline.explainer import Explainer
@@ -113,9 +113,22 @@ class Engine:
     async def _on_observed(self, observed: list[Observed]) -> None:
         async with self._pipeline_lock:
             await self.pipeline.process(observed)
+            # Parental controls' "Block games": ask about what those devices looked up, block what turns out a game
+            try:
+                found = await games.check(self.conn, self.explainer, await self.sync.game_catalog(), observed)
+            except Exception:
+                log.exception("game check failed")
+                found = []
+        if found:
+            games.alert(self.conn, found)
+            try:
+                await self.sync.sync_rules()
+            except AdGuardError:
+                pass  # retried from the poller tick
 
     async def _on_tick(self) -> None:
-        if self.sync.dirty:
+        # dirty: a push failed earlier. parental_changed: a bedtime started or ended since the last push.
+        if self.sync.dirty or self.sync.parental_changed():
             try:
                 await self.sync.sync_all()
             except AdGuardError:
