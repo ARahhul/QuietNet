@@ -1,32 +1,22 @@
-# React + TypeScript + Vite
+# QuietNet dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The React dashboard and public homepage ([quietnet.in](https://quietnet.in)) for QuietNet. React 19, TypeScript, Vite, Tailwind CSS 4, TanStack Query and Firebase Authentication (Google sign-in).
 
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```powershell
+npm install
+npm run dev            # http://localhost:5173, proxies /api to the backend on :8000
+npm run dev:emulator   # http://localhost:5174, against the Firebase Auth emulator (.env.emulator)
+npm run lint           # oxlint
+npm run build          # type-check, then production build into dist/
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Run the backend first (see the [root README](../README.md#quick-start)), or use `.\scripts\dev.ps1` from the repo root to start everything.
+
+| Folder | What |
+|---|---|
+| `src/pages/` | Landing, Login, Setup, Suggestions, Devices, Device detail, Live, Blocked, Report, Alerts, Settings |
+| `src/components/` | Shared UI, the setup wizard, the TV assistant (`assistant/`), "Saw an ad?" and "Site or app not working?" |
+| `src/lib/` | Firebase setup, image helpers, chart helpers, credits |
+| `src/api.ts` | Typed client for the backend's `/api` |
+
+Production settings are in `.env.production` (Firebase web config, which is public by design). The hosted build deploys to Firebase Hosting, configured in the root `firebase.json`.

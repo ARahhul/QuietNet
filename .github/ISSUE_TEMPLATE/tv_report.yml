@@ -1,0 +1,27 @@
+name: TV or router report
+description: The assistant didn't work, or worked, on a specific TV or router
+labels: [hardware]
+body:
+  - type: input
+    id: device
+    attributes:
+      label: Brand, model and OS version
+      placeholder: "LG OLED C2, webOS 22"
+    validations: { required: true }
+  - type: dropdown
+    id: outcome
+    attributes:
+      label: What happened?
+      options:
+        - It connected automatically
+        - It connected with the laptop relay
+        - It showed a manual guide and the guide worked
+        - The guide was wrong or missing a step
+        - The TV wasn't found or was misidentified
+    validations: { required: true }
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Which step was wrong, and what the TV showed instead. Don't paste MAC addresses.
+    validations: { required: true }
