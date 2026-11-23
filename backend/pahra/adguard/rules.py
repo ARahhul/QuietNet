@@ -6,7 +6,12 @@ All users share ONE AdGuard Home, so every rule QuietNet pushes MUST carry `$cli
 
 The one deliberate global layer besides threat intel is QuietNet's block list (pahra.blocklist), loaded as its own
 AdGuard filter list. It only ever blocks (`||domain^`, no `@@`, no modifiers), so it can't open anything up for a
-home, and a home's own `@@...$client` allow rule here still lets a listed name through for that home alone.
+home.
+
+A home's own rules carry `important`, so they rank above both lists. AdGuard's order, highest first:
+`@@...$important` (a home lets a name through) > `...$important` (a home blocks it) > plain `@@...` > plain blocks
+(the shared lists). A home that switched the shared list off gets one plain `@@||*^` for its devices
+(`optout_rule`): it beats the lists' plain blocks and loses to the home's own rules.
 """
 
 import ipaddress
@@ -48,7 +53,17 @@ def build_adguard_rule(domain: str, client_ids: list[str], action: str = "block"
     ids = sorted({validate_client_id(c) for c in client_ids})
     clients_str = "|".join(f"'{cid}'" for cid in ids)
     prefix = "@@||" if action == "allow" else "||"
-    return f"{prefix}{d}^$client={clients_str}"
+    return f"{prefix}{d}^$client={clients_str},important"
+
+
+def optout_rule(client_ids: list[str]) -> str:
+    """For a home that switched QuietNet's shared block list off: let everything through on its devices, unless the
+    home's own (important) rules say otherwise. The threat lists are plain blocks too, so they stop blocking on the
+    first lookup for that home; QuietNet still blocks malware for a device once it sees it (pipeline.policy)."""
+    if not client_ids:
+        raise RuleSecurityError("SECURITY VIOLATION: Never push a global rule without $client!")
+    ids = sorted({validate_client_id(c) for c in client_ids})
+    return "@@||*^$client=" + "|".join(f"'{cid}'" for cid in ids)
 
 
 _CLIENT_MOD_RE = re.compile(r"\$(?:[^,]*,)*client=('[a-z0-9-]+'(?:\|'[a-z0-9-]+')*)(?:,|$)")

@@ -198,10 +198,18 @@ export default function Blocked() {
         )}
       </div>
 
-      {(listAll.length > 0 || listed.data?.active === false) && (
+      {(listAll.length > 0 || listed.data?.active === false || listed.data?.home_off) && (
         <section className="mt-10">
           <Eyebrow>Blocked by QuietNet's list</Eyebrow>
-          {listed.data?.active === false && (
+          {listed.data?.home_off ? (
+            <p className="mt-1 max-w-prose text-sm text-muted">
+              You switched QuietNet's ad & tracker list off for your home in{' '}
+              <Link to="/settings" className="text-guard underline-slide">
+                Settings
+              </Link>
+              , so only your own rules are blocking. Anything below was turned away before that.
+            </p>
+          ) : listed.data?.active === false && (
             <p className="mt-1 max-w-prose text-sm text-warn">
               QuietNet's ad & tracker list isn't loaded into the DNS server right now, so only your own rules and the threat list
               are blocking. It retries by itself.

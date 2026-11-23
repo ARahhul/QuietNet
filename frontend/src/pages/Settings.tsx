@@ -12,7 +12,11 @@ export default function Settings() {
   const health = useQuery({ queryKey: ['health'], queryFn: api.health, refetchInterval: 15000 })
   const patch = useMutation({
     mutationFn: api.patchSettings,
-    onSuccess: (s) => qc.setQueryData(['settings'], s),
+    onSuccess: (s, sent) => {
+      qc.setQueryData(['settings'], s)
+      // The list decides what Suggestions, Blocked and the device pages show
+      if (sent.shared_blocklist !== undefined) qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'settings' })
+    },
   })
   const s = settings.data
   const h = health.data
@@ -30,14 +34,35 @@ export default function Settings() {
             The rest wait in Suggestions. You get a notification and can undo any time.
           </div>
         </div>
-        <button
-          role="switch"
-          aria-checked={!!s?.auto_mode}
-          onClick={() => s && patch.mutate({ auto_mode: !s.auto_mode })}
-          className={`relative h-7 w-12 shrink-0 rounded-full border transition ${s?.auto_mode ? 'border-brand bg-brand' : 'border-line bg-panel-2'}`}
-        >
-          <span className={`absolute top-[3px] h-5 w-5 rounded-full bg-white transition-all ${s?.auto_mode ? 'left-[23px]' : 'left-[3px]'}`} />
-        </button>
+        <Switch label="Auto-mode" on={!!s?.auto_mode} onClick={() => s && patch.mutate({ auto_mode: !s.auto_mode })} />
+      </div>
+
+      <div className="card mt-4 flex items-center gap-4 p-5">
+        <div className="flex-1">
+          <div className="font-display text-xl">Block known ads & trackers</div>
+          <div className="mt-1 text-sm text-muted">
+            QuietNet's shared list turns known ad, tracker and threat domains away on the very first lookup, without asking
+            the AI.
+          </div>
+          {s && !s.shared_blocklist && (
+            <div className="mt-2 text-sm text-warn">
+              Off for your home. Your own blocks still apply. Malware is blocked once QuietNet sees it, but no longer on the
+              very first lookup.
+            </div>
+          )}
+          {patch.data?.synced === false && (
+            <div className="mt-2 text-xs text-muted">Saved. The DNS server picks it up as soon as it answers again.</div>
+          )}
+        </div>
+        <Switch
+          label="Block known ads & trackers"
+          on={!!s?.shared_blocklist}
+          onClick={() => {
+            if (!s) return
+            if (s.shared_blocklist && !confirm('Stop blocking known ads and trackers for your home? Your own blocks keep working.')) return
+            patch.mutate({ shared_blocklist: !s.shared_blocklist })
+          }}
+        />
       </div>
 
       <Eyebrow className="mt-10">System status</Eyebrow>
@@ -123,6 +148,20 @@ export default function Settings() {
 }
 
 // The cloud DNS stack in infra/ and the data the engine classifies with (see README, Credits).
+
+function Switch({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      onClick={onClick}
+      className={`relative h-7 w-12 shrink-0 rounded-full border transition ${on ? 'border-brand bg-brand' : 'border-line bg-panel-2'}`}
+    >
+      <span className={`absolute top-[3px] h-5 w-5 rounded-full bg-white transition-all ${on ? 'left-[23px]' : 'left-[3px]'}`} />
+    </button>
+  )
+}
 
 function Row({ label, ok, detail }: { label: string; ok?: boolean; detail?: string | null }) {
   return (

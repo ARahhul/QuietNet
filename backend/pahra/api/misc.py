@@ -42,6 +42,7 @@ async def report(e: Engine = Depends(engine)):
 
 class SettingsPatch(BaseModel):
     auto_mode: bool | None = None
+    shared_blocklist: bool | None = None  # QuietNet's ad & tracker list for this home (on unless switched off)
 
 
 def _settings(e: Engine) -> dict:
@@ -49,6 +50,7 @@ def _settings(e: Engine) -> dict:
     return {
         "email": u["email"],
         "auto_mode": bool(u["auto_mode"]),
+        "shared_blocklist": bool(u["shared_blocklist"]),
         "dns_hostname": e.settings.dns_hostname,
         "vm_ip": e.settings.vm_ip,
     }
@@ -63,7 +65,19 @@ async def get_settings(e: Engine = Depends(engine)):
 async def patch_settings(body: SettingsPatch, e: Engine = Depends(engine)):
     if body.auto_mode is not None:
         e.conn.execute("UPDATE users SET auto_mode = ? WHERE id = ?", (int(body.auto_mode), e.user_id))
-    return _settings(e)
+    synced = None
+    if body.shared_blocklist is not None:
+        on = int(body.shared_blocklist)
+        n = e.conn.execute(
+            "UPDATE users SET shared_blocklist = ? WHERE id = ? AND shared_blocklist != ?", (on, e.user_id, on)
+        ).rowcount
+        if n:
+            try:  # adds or drops this home's allow-everything rule (adguard.rules.optout_rule)
+                await e.sync.sync_rules()
+                synced = True
+            except AdGuardError:
+                synced = False  # the sync loop retries
+    return _settings(e) | ({"synced": synced} if synced is not None else {})
 
 
 @router.get("/health")

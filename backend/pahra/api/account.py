@@ -5,6 +5,7 @@ import secrets
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from .. import tickets
 from ..auth import ClaimError, claim_operator
 from ..engine import Engine
 from .deps import engine
@@ -25,6 +26,20 @@ async def account(request: Request, e: Engine = Depends(engine)):
         and e.user_id != operator
         and not e.conn.execute("SELECT firebase_uid FROM users WHERE id = ?", (operator,)).fetchone()["firebase_uid"],
     }
+
+
+class TicketIn(BaseModel):
+    path: str = Field(min_length=1, max_length=200)  # under /api, e.g. /devices/<id>/profile.mobileconfig
+
+
+@router.post("/tickets")
+async def ticket(body: TicketIn, e: Engine = Depends(engine)):
+    """A two-minute ticket for one link that can't carry the sign-in: the assistant's stream or the iPhone profile.
+    Only a Bearer sign-in gets one (a ticket can't make another: tickets only open GETs)."""
+    path = "/api" + body.path
+    if not tickets.allowed(path):
+        raise HTTPException(422, "Tickets are only for the assistant's stream and the iPhone profile download.")
+    return {"ticket": tickets.make(e.ticket_key, e.user_id, path), "expires_in": tickets.TTL_S}
 
 
 class ClaimIn(BaseModel):

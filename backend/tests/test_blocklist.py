@@ -155,9 +155,9 @@ def test_view_explains_a_list_block_and_unblock_lets_it_through(api, fake):
     tv = api.post("/api/devices", json={"name": "Living room TV", "type": "tv", "brand": "LG"}, headers=H).json()["device"]
     phone = api.post("/api/devices", json={"name": "Phone", "type": "phone"}, headers=H).json()["device"]
     for _ in range(3):
-        fake.record("living-room-tv", "tkacr.alphonso.tv")
-    fake.record("phone", "api.mixpanel.com")
-    fake.record("phone", "news.example-news.in")
+        fake.record(tv["client_id"], "tkacr.alphonso.tv")
+    fake.record(phone["client_id"], "api.mixpanel.com")
+    fake.record(phone["client_id"], "news.example-news.in")
     _drive(api)
 
     listed = api.get("/api/blocked/by-list", headers=H).json()
@@ -180,8 +180,8 @@ def test_view_explains_a_list_block_and_unblock_lets_it_through(api, fake):
 
     # Unblock for the TV only: its own allow rule beats the list there, the phone stays protected
     r = api.post("/api/sites/unblock", json={"names": v["actions"]["unblock"], "device_id": tv["id"]}, headers=H).json()
-    assert r["synced"] and not fake.match("tkacr.alphonso.tv", "living-room-tv")[0]
-    assert fake.match("tkacr.alphonso.tv", "phone")[0]
+    assert r["synced"] and not fake.match("tkacr.alphonso.tv", tv["client_id"])[0]
+    assert fake.match("tkacr.alphonso.tv", phone["client_id"])[0]
     on_tv = api.get("/api/domains/tkacr.alphonso.tv", params={"device_id": tv["id"]}, headers=H).json()
     assert on_tv["status"] == "allowed" and on_tv["blocked_by"] == "let_through"
     assert on_tv["actions"]["undo_allow"] == [r["decisions"][0]["id"]]
@@ -190,7 +190,7 @@ def test_view_explains_a_list_block_and_unblock_lets_it_through(api, fake):
 
     # "Block again" drops the allow rule, and the list applies once more
     api.post("/api/decisions/undo-bulk", json={"ids": on_tv["actions"]["undo_allow"]}, headers=H)
-    assert fake.match("tkacr.alphonso.tv", "living-room-tv")[0]
+    assert fake.match("tkacr.alphonso.tv", tv["client_id"])[0]
 
     # Something on no list: allowed, with a Block button for a rule of this home's own
     n = api.get("/api/domains/news.example-news.in", headers=H).json()
@@ -202,8 +202,8 @@ def test_view_explains_a_list_block_and_unblock_lets_it_through(api, fake):
 
 def test_view_of_a_whole_domain_follows_the_names_looked_up_under_it(api, fake):
     """Suggestions and the Report name a whole domain; the list may only cover the names looked up under it."""
-    api.post("/api/devices", json={"name": "Phone", "type": "phone"}, headers=H)
-    fake.record("phone", "googleads.g.doubleclick.net")  # g.doubleclick.net is listed, doubleclick.net isn't
+    phone = api.post("/api/devices", json={"name": "Phone", "type": "phone"}, headers=H).json()["device"]
+    fake.record(phone["client_id"], "googleads.g.doubleclick.net")  # g.doubleclick.net is listed, doubleclick.net isn't
     _drive(api)
     v = api.get("/api/domains/doubleclick.net", headers=H).json()
     assert (v["status"], v["blocked_by"]) == ("blocked", "blocklist")
@@ -216,16 +216,16 @@ def test_view_of_a_whole_domain_follows_the_names_looked_up_under_it(api, fake):
     assert after["looked_up"][0]["let_through"] and after["actions"]["undo_allow"] == [r["decisions"][0]["id"]]
     assert after["actions"]["block"] is None
     # a name that was never looked up isn't covered by that unblock
-    assert fake.match("other.g.doubleclick.net", "phone")[0]
+    assert fake.match("other.g.doubleclick.net", phone["client_id"])[0]
 
 
 def test_no_card_for_what_the_list_already_blocks_name_by_name(api, fake):
     """doubleclick.net isn't listed, g.doubleclick.net is: a device that only looked up listed names gets no card."""
     phone = api.post("/api/devices", json={"name": "Phone", "type": "phone"}, headers=H).json()["device"]
     tv = api.post("/api/devices", json={"name": "TV", "type": "tv", "brand": "LG"}, headers=H).json()["device"]
-    fake.record("phone", "googleads.g.doubleclick.net")
-    fake.record("tv", "googleads.g.doubleclick.net")
-    fake.record("tv", "doubleclick.net")  # the bare domain isn't listed, so the TV got an answer for it
+    fake.record(phone["client_id"], "googleads.g.doubleclick.net")
+    fake.record(tv["client_id"], "googleads.g.doubleclick.net")
+    fake.record(tv["client_id"], "doubleclick.net")  # the bare domain isn't listed, so the TV got an answer for it
     _drive(api)
 
     cards = {c["domain"]: c for c in api.get("/api/suggestions", headers=H).json()}

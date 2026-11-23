@@ -7,6 +7,8 @@ so writes are naturally serialised; WAL keeps external readers (e.g. sqlite3 CLI
 import json
 import sqlite3
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -31,12 +33,32 @@ def _migrate(conn: sqlite3.Connection) -> None:
     users = {r["name"] for r in conn.execute("PRAGMA table_info(users)")}
     if "firebase_uid" not in users:
         conn.execute("ALTER TABLE users ADD COLUMN firebase_uid TEXT")
+    if "shared_blocklist" not in users:
+        conn.execute("ALTER TABLE users ADD COLUMN shared_blocklist INTEGER NOT NULL DEFAULT 1")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_firebase ON users(firebase_uid) WHERE firebase_uid IS NOT NULL")
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(devices)")}
     if "lan_ip" not in cols:
         conn.execute("ALTER TABLE devices ADD COLUMN lan_ip TEXT")
     if "ddns_host" not in cols:
         conn.execute("ALTER TABLE devices ADD COLUMN ddns_host TEXT")
+
+
+@contextmanager
+def transaction(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
+    """The writes inside happen together or not at all. A savepoint, so it nests and works with autocommit.
+
+    Never `await` inside: every request shares this one connection, so another request's writes would land inside
+    this transaction (and be rolled back with it). Write first, then talk to AdGuard.
+    """
+    name = f"sp_{uuid.uuid4().hex[:12]}"
+    conn.execute(f"SAVEPOINT {name}")
+    try:
+        yield conn
+    except BaseException:
+        conn.execute(f"ROLLBACK TO {name}")
+        conn.execute(f"RELEASE {name}")
+        raise
+    conn.execute(f"RELEASE {name}")
 
 
 def now_iso() -> str:

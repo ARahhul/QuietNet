@@ -3,7 +3,7 @@
 import sqlite3
 
 from .adguard.rules import build_adguard_rule
-from .db import new_id, now_iso, row_to_dict
+from .db import new_id, now_iso, row_to_dict, transaction
 
 
 class DecisionError(ValueError):
@@ -52,22 +52,23 @@ def create_decision(
     ids = _target_client_ids(conn, user_id, device_id)
     rule = build_adguard_rule(domain, ids, action)
     ts = now_iso()
-    if device_id is None:
-        conn.execute(
-            "UPDATE decisions SET undone_at = ? WHERE user_id = ? AND domain = ? AND device_id IS NULL AND undone_at IS NULL",
-            (ts, user_id, domain),
-        )
-    else:
-        conn.execute(
-            "UPDATE decisions SET undone_at = ? WHERE domain = ? AND device_id = ? AND undone_at IS NULL",
-            (ts, domain, device_id),
-        )
     did = new_id()
-    conn.execute(
-        "INSERT INTO decisions(id, user_id, device_id, domain, action, adguard_rule, decided_by, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (did, user_id, device_id, domain, action, rule, decided_by, ts),
-    )
+    with transaction(conn):  # the old decision is only superseded if the new one is saved
+        if device_id is None:
+            conn.execute(
+                "UPDATE decisions SET undone_at = ? WHERE user_id = ? AND domain = ? AND device_id IS NULL AND undone_at IS NULL",
+                (ts, user_id, domain),
+            )
+        else:
+            conn.execute(
+                "UPDATE decisions SET undone_at = ? WHERE domain = ? AND device_id = ? AND undone_at IS NULL",
+                (ts, domain, device_id),
+            )
+        conn.execute(
+            "INSERT INTO decisions(id, user_id, device_id, domain, action, adguard_rule, decided_by, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (did, user_id, device_id, domain, action, rule, decided_by, ts),
+        )
     return get_decision(conn, did)  # type: ignore[return-value]
 
 

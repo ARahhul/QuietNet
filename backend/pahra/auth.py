@@ -22,7 +22,7 @@ import httpx
 from google.auth import exceptions as gexc
 from google.auth import jwt as gjwt
 
-from .db import new_id, now_iso
+from .db import new_id, now_iso, transaction
 
 log = logging.getLogger("pahra.auth")
 
@@ -141,11 +141,12 @@ def claim_operator(conn: sqlite3.Connection, operator_id: str, user_id: str, cla
         if op["firebase_uid"] == claims["sub"]:
             return op["id"]
         raise ClaimError("This server's first account already belongs to another sign-in.")
-    if user_id != op["id"]:
-        if conn.execute("SELECT 1 FROM devices WHERE user_id = ?", (user_id,)).fetchone():
-            raise ClaimError("This sign-in already has its own devices, so the first account can't be moved onto it.")
-        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
-    # The email stays: the server finds its operator account by SEED_USER_EMAIL when it starts.
-    conn.execute("UPDATE users SET firebase_uid = ? WHERE id = ?", (claims["sub"], op["id"]))
+    if user_id != op["id"] and conn.execute("SELECT 1 FROM devices WHERE user_id = ?", (user_id,)).fetchone():
+        raise ClaimError("This sign-in already has its own devices, so the first account can't be moved onto it.")
+    with transaction(conn):  # never a deleted sign-in account without the operator account taking its place
+        if user_id != op["id"]:
+            conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        # The email stays: the server finds its operator account by SEED_USER_EMAIL when it starts.
+        conn.execute("UPDATE users SET firebase_uid = ? WHERE id = ?", (claims["sub"], op["id"]))
     log.info("operator account %s moved onto a Firebase sign-in", op["id"])
     return op["id"]

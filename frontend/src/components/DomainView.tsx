@@ -389,7 +389,7 @@ function Reason({ r, name }: { r: DomainReason; name: string }) {
             {r.created_at && <> · since {timeAgo(r.created_at)}</>}
           </p>
         )}
-        {r.kind === 'blocklist' && r.active === false && (
+        {r.kind === 'blocklist' && r.active === false && !r.home_off && (
           <p className="mt-1 text-xs text-warn">The list isn't loaded into the DNS server right now, so it isn't blocking yet.</p>
         )}
         {r.names && r.names.length > 0 && <p className="mt-1 text-xs text-muted">Listed names: {r.names.join(', ')}</p>}

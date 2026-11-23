@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS users (
     email       TEXT NOT NULL UNIQUE,
     auto_mode   INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT NOT NULL,
-    firebase_uid TEXT                            -- Firebase Authentication user (NULL: the operator before sign-in)
+    firebase_uid TEXT,                           -- Firebase Authentication user (NULL: the operator before sign-in)
+    shared_blocklist INTEGER NOT NULL DEFAULT 1  -- 0: the home switched QuietNet's shared ad & tracker list off
 );
 
 CREATE TABLE IF NOT EXISTS devices (

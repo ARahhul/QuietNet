@@ -1,5 +1,7 @@
+import base64
 import ipaddress
 import re
+import secrets
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -9,7 +11,7 @@ from pydantic import BaseModel, Field
 from ..adguard.client import AdGuardError
 from .. import forwarder, home_address, setup_check
 from ..adguard.rules import validate_domain
-from ..db import get_meta, new_id, now_iso, row_to_dict
+from ..db import get_meta, new_id, now_iso, row_to_dict, transaction
 from ..engine import Engine
 from ..queries import device_activity, devices_overview
 from ..setup_guides import CGNAT_NET, default_setup_method, mobileconfig, setup_guide
@@ -43,12 +45,16 @@ class DevicePatch(BaseModel):
 
 
 def slug_client_id(e: Engine, name: str, wanted: str | None) -> str:
-    base = re.sub(r"[^a-z0-9]+", "-", (wanted or name).lower()).strip("-")[:40].strip("-") or "device"
-    cid, n = base, 2
-    while e.conn.execute("SELECT 1 FROM devices WHERE client_id = ?", (cid,)).fetchone():
-        cid = f"{base[:36]}-{n}"
-        n += 1
-    return cid
+    """A device's address (its AdGuard ClientID): a readable part from its name, then 8 random characters.
+
+    The address is all it takes to use QuietNet's resolver as that device (its lookups land in the home's log and new
+    domains go to the AI), so it mustn't be guessable from the name: `living-room-tv-k3x7q2ma`, 40 random bits.
+    """
+    base = re.sub(r"[^a-z0-9]+", "-", (wanted or name).lower()).strip("-")[:30].strip("-") or "device"
+    while True:
+        cid = f"{base}-{base64.b32encode(secrets.token_bytes(5)).decode().lower()}"
+        if not e.conn.execute("SELECT 1 FROM devices WHERE client_id = ?", (cid,)).fetchone():
+            return cid
 
 
 def _get(e: Engine, device_id: str) -> dict:
@@ -172,6 +178,27 @@ async def delete_device(device_id: str, e: Engine = Depends(engine)):
     if dev["setup_method"] == "forwarder":
         await forwarder.apply(e)  # stop relaying for that TV
     return Response(status_code=204)
+
+
+@router.post("/devices/{device_id}/client-id", dependencies=[Depends(limit("device_change", DEVICE_CHANGE))])
+async def change_client_id(device_id: str, e: Engine = Depends(engine)):
+    """Give a device a new address, e.g. one set up before addresses had a random part, or one someone else may
+    know. The old address stops working straight away: the device needs the new one entered (the setup steps)."""
+    dev = _get(e, device_id)
+    old = dev["client_id"]
+    with transaction(e.conn):
+        e.conn.execute("UPDATE devices SET client_id = ? WHERE id = ?", (slug_client_id(e, dev["name"], None), dev["id"]))
+        e.sync.refresh_rules()  # its own rules and its home's household rules now name the new address
+    await e.sync.remove_client(old)
+    synced = await _sync_after_device_change(e)  # adds the new client and drops the old one from the allow-list
+    if dev["setup_method"] == "forwarder":
+        await forwarder.apply(e)  # the laptop relay forwards that TV under its new address
+    dev = _get(e, device_id)
+    return {
+        "device": _with_follow(e, dev),
+        "setup": setup_guide(e.settings, dev, get_meta(e.conn, "forwarder_listen_ip")),
+        "synced": synced,
+    }
 
 
 @router.get("/devices/{device_id}/setup")

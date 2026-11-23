@@ -31,6 +31,7 @@ services:
       # The companion (LAN scan, ADB, TV relay) has to run on a computer at home, not here.
       COMPANION_ENABLED: "false"
       API_DOCS: "false"            # don't publish a map of every endpoint
+      ENV: production              # refuse to start with development defaults (dev-token, change-me, ...)
       # QuietNet's ad & tracker block list: the backend writes it here, AdGuard reads the same file as a filter list
       # (inside AdGuard's work/userfilters/, which its safe_fs_patterns allow)
       ADGUARD_BLOCKLIST_DIR: /blocklist

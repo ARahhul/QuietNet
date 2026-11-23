@@ -22,7 +22,7 @@ from ..blocklist import FILTER_NAME
 from ..config import Settings
 from ..db import get_meta, now_iso, set_meta
 from .client import AdGuardClient, AdGuardError
-from .rules import build_adguard_rule, compile_section, is_rescue_catch_all, rescue_rules, splice_section
+from .rules import build_adguard_rule, compile_section, is_rescue_catch_all, optout_rule, rescue_rules, splice_section
 
 log = logging.getLogger("pahra.sync")
 
@@ -67,14 +67,22 @@ class AdGuardSync:
         rows = self.conn.execute("SELECT client_id FROM devices WHERE user_id = ?", (user_id,)).fetchall()
         return [r["client_id"] for r in rows]
 
-    def refresh_household_rules(self) -> None:
-        """Household decisions (device_id NULL) must cover devices added later."""
+    def refresh_rules(self) -> None:
+        """Rebuild every active decision's rule from what is true now: a household decision covers devices added
+        later, and a device's own decision follows a new address (ClientID). An undone decision is rebuilt when it
+        is put back, since that makes it active again before the next push."""
         rows = self.conn.execute(
-            "SELECT id, user_id, domain, action, adguard_rule FROM decisions "
-            "WHERE device_id IS NULL AND undone_at IS NULL"
+            "SELECT d.id, d.user_id, d.device_id, d.domain, d.action, d.adguard_rule, v.client_id "
+            "FROM decisions d LEFT JOIN devices v ON v.id = d.device_id WHERE d.undone_at IS NULL"
         ).fetchall()
+        homes: dict[str, list[str]] = {}
         for r in rows:
-            ids = self.household_client_ids(r["user_id"])
+            if r["device_id"] is None:
+                if r["user_id"] not in homes:
+                    homes[r["user_id"]] = self.household_client_ids(r["user_id"])
+                ids = homes[r["user_id"]]
+            else:
+                ids = [r["client_id"]] if r["client_id"] else []
             if not ids:
                 continue
             rule = build_adguard_rule(r["domain"], ids, r["action"])
@@ -82,9 +90,14 @@ class AdGuardSync:
                 self.conn.execute("UPDATE decisions SET adguard_rule = ? WHERE id = ?", (rule, r["id"]))
 
     def desired_rules(self) -> list[str]:
-        self.refresh_household_rules()
+        self.refresh_rules()
         rows = self.conn.execute("SELECT adguard_rule FROM decisions WHERE undone_at IS NULL").fetchall()
-        return [r["adguard_rule"] for r in rows]
+        rules = [r["adguard_rule"] for r in rows]
+        # Homes that switched QuietNet's shared block list off (Settings)
+        for u in self.conn.execute("SELECT id FROM users WHERE shared_blocklist = 0").fetchall():
+            if ids := self.household_client_ids(u["id"]):
+                rules.append(optout_rule(ids))
+        return rules
 
     @property
     def rescue_mode(self) -> bool:

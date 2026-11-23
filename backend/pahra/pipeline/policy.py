@@ -41,6 +41,7 @@ def apply_policy(
     if not dev or not dom:
         return False
     user = conn.execute("SELECT * FROM users WHERE id = ?", (dev["user_id"],)).fetchone()
+    blocklisted = blocklisted and bool(user["shared_blocklist"])  # the home may have switched the list off
     sig = dom["signals"] or {}
     mine = active_decision(conn, domain, device_id)
     household = active_decision(conn, domain, None, dev["user_id"])

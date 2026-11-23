@@ -1,3 +1,5 @@
+import re
+
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -21,7 +23,9 @@ def api(settings, fake_app):
 
 def test_requires_token(api):
     assert api.get("/api/devices").status_code == 401
-    assert api.get("/api/devices", params={"token": "dev-token"}).status_code == 200
+    assert api.get("/api/devices", headers=H).status_code == 200
+    # A token in the URL isn't accepted any more: URLs end up in access logs (links use tickets, see test_hardening)
+    assert api.get("/api/devices", params={"token": "dev-token"}).status_code == 401
 
 
 def test_api_docs_can_be_turned_off(settings, fake_app):
@@ -45,26 +49,29 @@ def test_full_flow_block_all_and_undo(api, fake):
     r = api.post("/api/devices", json={"name": "Rahhul LG TV", "type": "tv", "brand": "LG"}, headers=H)
     assert r.status_code == 201, r.text
     tv = r.json()["device"]
-    assert tv["client_id"] == "rahhul-lg-tv" and tv["setup_method"] == "ipv4_demo"
-    assert "rahhul-lg-tv" in fake.clients  # persistent client created in AdGuard
+    # The address starts with the name but has a random part, so nobody can guess it from "Rahhul LG TV"
+    TV = tv["client_id"]
+    assert re.fullmatch(r"rahhul-lg-tv-[a-z2-7]{8}", TV) and tv["setup_method"] == "ipv4_demo"
+    assert TV in fake.clients  # persistent client created in AdGuard
     phone = api.post("/api/devices", json={"name": "Rahhul Phone", "type": "phone", "brand": "Android"}, headers=H).json()
-    assert phone["setup"]["values"]["dot_hostname"] == "rahhul-phone.dns.pahra.app"
+    PHONE = phone["device"]["client_id"]
+    assert phone["setup"]["values"]["dot_hostname"] == f"{PHONE}.dns.pahra.app"
     # Rescue mode: AdGuard lets everyone in, and a catch-all answers strangers only for Dynamic DNS / time names
     assert fake.access["allowed_clients"] == []
-    assert "||*^$client=~'rahhul-lg-tv'|~'rahhul-phone'" in fake.rules
+    assert f"||*^$client=~'{TV}'|~'{PHONE}'" in fake.rules
     assert fake.match("example.com", "stranger")[0] and not fake.match("dynupdate.no-ip.com", "stranger")[0]
-    assert not fake.match("example.com", "rahhul-phone")[0]
+    assert not fake.match("example.com", PHONE)[0]
 
     # doubleclick.net itself isn't listed (g.doubleclick.net is), so the TV gets an answer for it
     for q in ["tkacr.alphonso.tv", "us.ad.lgsmartad.com", "api-global.netflix.com", "googleads.g.doubleclick.net", "doubleclick.net"]:
-        fake.record("rahhul-lg-tv", q)
-    fake.record("rahhul-phone", "app-measurement.com")
-    fake.record("rahhul-phone", "z-na.amazon-adsystem.com")
+        fake.record(TV, q)
+    fake.record(PHONE, "app-measurement.com")
+    fake.record(PHONE, "z-na.amazon-adsystem.com")
     asyncio.run(_drive(api, fake))
 
     # Known trackers are on QuietNet's block list: AdGuard turned them away on the very first lookup, on every
     # device, before anyone clicked anything. They aren't cards.
-    assert fake.match("tkacr.alphonso.tv", "rahhul-lg-tv")[0] and fake.match("alphonso.tv", "rahhul-phone")[0]
+    assert fake.match("tkacr.alphonso.tv", TV)[0] and fake.match("alphonso.tv", PHONE)[0]
     by = {r["qname"]: r["blocked_by"] for r in api.engine.conn.execute("SELECT qname, blocked_by FROM queries")}
     assert by["tkacr.alphonso.tv"] == by["app-measurement.com"] == "blocklist" and by["api-global.netflix.com"] is None
     cards = api.get("/api/suggestions", headers=H).json()
@@ -75,24 +82,24 @@ def test_full_flow_block_all_and_undo(api, fake):
     assert all(c["sources"] for c in cards if c["confidence"] == "high")
 
     devs = api.get("/api/devices", headers=H).json()
-    assert next(d for d in devs if d["client_id"] == "rahhul-lg-tv")["risk_score"] > 0
+    assert next(d for d in devs if d["client_id"] == TV)["risk_score"] > 0
 
     r = api.post("/api/decisions/bulk", json={}, headers=H).json()
     assert r["synced"] and r["count"] == 2
-    assert fake.match("ads.doubleclick.net", "rahhul-lg-tv")[0]
-    assert fake.match("z-na.amazon-adsystem.com", "rahhul-phone")[0]
+    assert fake.match("ads.doubleclick.net", TV)[0]
+    assert fake.match("z-na.amazon-adsystem.com", PHONE)[0]
     blocked, rules = fake.match("doubleclick.net", "someone-else")  # a stranger: only ever the rescue catch-all
     assert not blocked or all(r.startswith("||*^$client=~") for r in rules)
     assert api.get("/api/suggestions", headers=H).json() == []
 
     api.post("/api/decisions/undo-bulk", json={"ids": [d["id"] for d in r["decisions"]]}, headers=H)
-    assert not fake.match("doubleclick.net", "rahhul-lg-tv")[0]
+    assert not fake.match("doubleclick.net", TV)[0]
     assert len(api.get("/api/suggestions", headers=H).json()) == len(cards)
 
     # "Block all (N)" blocks only the N cards on screen, not ones that arrived after the page rendered
     r = api.post("/api/decisions/bulk", json={"domains": ["doubleclick.net"]}, headers=H).json()
     assert [d["domain"] for d in r["decisions"]] == ["doubleclick.net"]
-    assert not fake.match("z-na.amazon-adsystem.com", "rahhul-phone")[0]
+    assert not fake.match("z-na.amazon-adsystem.com", PHONE)[0]
     api.post("/api/decisions/undo-bulk", json={"ids": [d["id"] for d in r["decisions"]]}, headers=H)
 
     acts = api.get(f"/api/devices/{tv['id']}/activity", headers=H).json()
@@ -128,10 +135,13 @@ def test_linked_ip_guards(api):
 def test_mobileconfig(api):
     d = api.post("/api/devices", json={"name": "Rahhul iPhone", "type": "phone", "brand": "Apple"}, headers=H).json()
     assert d["device"]["setup_method"] == "doh"
-    r = api.get(f"/api/devices/{d['device']['id']}/profile.mobileconfig", params={"token": "dev-token"})
-    assert r.status_code == 200 and "https://dns.pahra.app/dns-query/rahhul-iphone" in r.text
+    path = f"/devices/{d['device']['id']}/profile.mobileconfig"
+    ticket = api.post("/api/tickets", json={"path": path}, headers=H).json()["ticket"]
+    r = api.get(f"/api{path}", params={"ticket": ticket})  # the link Safari follows can't carry a header
+    cid = d["device"]["client_id"]
+    assert r.status_code == 200 and f"https://dns.pahra.app/dns-query/{cid}" in r.text
     # What iOS shows: QuietNet's name, never the old project name (the test server's DNS host aside)
-    assert 'filename="quietnet-rahhul-iphone.mobileconfig"' in r.headers["content-disposition"]
+    assert f'filename="quietnet-{cid}.mobileconfig"' in r.headers["content-disposition"]
     assert "<string>QuietNet</string>" in r.text and "in.quietnet.profile." in r.text
     assert "pahra" not in r.text.replace("dns.pahra.app", "")
 
@@ -147,8 +157,8 @@ def test_blocked_list(api, fake):
     tv = api.post("/api/devices", json={"name": "Living room TV", "type": "tv", "brand": "LG"}, headers=H).json()["device"]
     phone = api.post("/api/devices", json={"name": "Phone", "type": "phone"}, headers=H).json()["device"]
     for _ in range(3):
-        fake.record("living-room-tv", "tkacr.alphonso.tv")
-    fake.record("phone", "app-measurement.com")
+        fake.record(tv["client_id"], "tkacr.alphonso.tv")
+    fake.record(phone["client_id"], "app-measurement.com")
     asyncio.run(_drive(api, fake))
     assert api.get("/api/blocked", headers=H).json() == []
 
@@ -186,10 +196,10 @@ def test_live_lookups_and_analytics(api, fake):
     from datetime import datetime, timedelta, timezone
 
     t0 = datetime.now(timezone.utc) - timedelta(seconds=10)
-    fake.record("living-room-tv", "tkacr.alphonso.tv", t0)  # blocked by our rule
-    fake.record("living-room-tv", "api-global.netflix.com", t0 + timedelta(seconds=1), qtype="AAAA")
-    fake.record("living-room-tv", "api-global.netflix.com", t0 + timedelta(seconds=2), cached=True)
-    fake.record("phone", "www.google.com", t0 + timedelta(seconds=3), upstream="tls://1.0.0.1")
+    fake.record(tv["client_id"], "tkacr.alphonso.tv", t0)  # blocked by our rule
+    fake.record(tv["client_id"], "api-global.netflix.com", t0 + timedelta(seconds=1), qtype="AAAA")
+    fake.record(tv["client_id"], "api-global.netflix.com", t0 + timedelta(seconds=2), cached=True)
+    fake.record(phone["client_id"], "www.google.com", t0 + timedelta(seconds=3), upstream="tls://1.0.0.1")
     asyncio.run(_drive(api, fake))
 
     live = api.get("/api/live/queries", headers=H).json()

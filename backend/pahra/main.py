@@ -23,6 +23,8 @@ def create_app(
 ) -> FastAPI:
     """`assistant_factory(engine) -> AssistantService` (tests inject an in-process companion)."""
     settings = settings or get_settings()
+    if settings.env == "production" and (problems := settings.check_production()):
+        raise RuntimeError("Refusing to start in production: " + "; ".join(problems))
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):

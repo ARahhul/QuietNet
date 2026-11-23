@@ -104,6 +104,7 @@ class Rule:
     domain: str  # "*" matches every name (QuietNet's rescue catch-all `||*^`)
     clients: list[str]
     exclude: list[str] = field(default_factory=list)  # `$client=~'a'|~'b'`: everyone except these
+    important: bool = False  # `$important`: outranks every rule without it
 
 
 def parse_rule(line: str) -> Rule | None:
@@ -117,12 +118,15 @@ def parse_rule(line: str) -> Rule | None:
     pattern, _, mods = body[2:].partition("$")
     clients: list[str] = []
     exclude: list[str] = []
+    important = False
     for m in mods.split(","):
-        if m.startswith("client="):
+        if m == "important":
+            important = True
+        elif m.startswith("client="):
             for c in m[len("client="):].split("|"):
                 c = c.strip()
                 (exclude if c.startswith("~") else clients).append(c.lstrip("~").strip("'\""))
-    return Rule(line, allow, pattern.rstrip("^").lower(), clients, exclude)
+    return Rule(line, allow, pattern.rstrip("^").lower(), clients, exclude, important)
 
 
 @dataclass
@@ -152,9 +156,10 @@ class State:
         f["rules_count"] = len(domains)
 
     def match_detail(self, qname: str, client: str) -> tuple[bool, list[tuple[str, int]]]:
-        """(blocked, [(rule text, filter_list_id)]). Custom rules are filter 0; an allow rule beats every block."""
+        """(blocked, [(rule text, filter_list_id)]). Custom rules are filter 0. AdGuard's order, highest first:
+        important allow > important block > allow > block (custom rules and the filter lists alike)."""
         q = qname.lower().strip(".")
-        hits_block, hits_allow = [], []
+        hits: list[Rule] = []
         for r in self.parsed():
             if not (r.domain == "*" or q == r.domain or q.endswith("." + r.domain)):
                 continue
@@ -162,9 +167,13 @@ class State:
                 continue
             if client in r.exclude:
                 continue
-            (hits_allow if r.allow else hits_block).append((r.raw, 0))
-        if hits_allow:
-            return False, hits_allow
+            hits.append(r)
+        for important in (True, False):
+            if allows := [(r.raw, 0) for r in hits if r.allow and r.important == important]:
+                return False, allows
+            if important and (blocks := [(r.raw, 0) for r in hits if not r.allow and r.important]):
+                return True, blocks
+        hits_block = [(r.raw, 0) for r in hits if not r.allow]
         labels = q.split(".")
         names = [".".join(labels[i:]) for i in range(len(labels))]
         for f in self.filters:

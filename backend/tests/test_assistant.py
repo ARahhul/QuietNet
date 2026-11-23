@@ -310,6 +310,8 @@ def test_http_endpoints(settings, fake_app):
                 break
             time.sleep(0.05)
         assert body["done"] and body["events"][-1]["outcome"] == "guide"
-        with c.stream("GET", f"/api/assistant/sessions/{sid}/stream", params={"token": "dev-token"}) as st:
+        # EventSource can't send the sign-in: it opens the stream with a two-minute ticket
+        ticket = c.post("/api/tickets", json={"path": f"/assistant/sessions/{sid}/stream"}, headers=H).json()["ticket"]
+        with c.stream("GET", f"/api/assistant/sessions/{sid}/stream", params={"ticket": ticket}) as st:
             lines = [ln for ln in st.iter_lines() if ln.startswith("data: ")]
         assert json.loads(lines[-1][6:])["type"] == "done"

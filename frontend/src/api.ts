@@ -67,9 +67,12 @@ async function req<T>(method: string, path: string, body?: unknown, retried = fa
   return data as T
 }
 
-/** For EventSource and plain links, which can't send an Authorization header. */
-export const withToken = (path: string) =>
-  `${apiUrl(path)}${path.includes('?') ? '&' : '?'}token=${encodeURIComponent(firebaseTokenNow() || getToken())}`
+/** For EventSource and plain links, which can't send an Authorization header: the URL with a two-minute ticket for
+ * that one path. The sign-in itself never goes into a URL, since URLs end up in logs and browser history. */
+export async function withTicket(path: string): Promise<string> {
+  const { ticket } = await req<{ ticket: string }>('POST', '/tickets', { path })
+  return `${apiUrl(path)}${path.includes('?') ? '&' : '?'}ticket=${encodeURIComponent(ticket)}`
+}
 
 // ---------- types ----------
 /** What the AI read on a pasted screenshot, with QuietNet's values already filled in */
@@ -436,8 +439,10 @@ export interface DomainReason {
   notes?: string
   category?: Category
   owner?: string | null
-  /** the list is loaded in the DNS server (blocklist) */
+  /** the list is loaded in the DNS server and blocks for this home (blocklist) */
   active?: boolean
+  /** this home switched QuietNet's list off in Settings (blocklist) */
+  home_off?: boolean
   /** viewing a whole domain: the names looked up under it that the list covers (blocklist) */
   names?: string[]
   decision_id?: string
@@ -503,6 +508,8 @@ export interface Report {
 export interface Settings {
   email: string
   auto_mode: boolean
+  /** QuietNet's shared ad & tracker list blocks for this home (on unless switched off) */
+  shared_blocklist: boolean
   dns_hostname: string
   vm_ip: string
 }
@@ -529,6 +536,9 @@ export const api = {
     req<{ device: Device; setup: SetupGuide; synced: boolean }>('POST', '/devices', b),
   patchDevice: (id: string, b: Record<string, unknown>) => req<{ device: Device }>('PATCH', `/devices/${id}`, b),
   deleteDevice: (id: string) => req<void>('DELETE', `/devices/${id}`),
+  /** A new address (ClientID) for the device; the old one stops working at once. */
+  changeDeviceAddress: (id: string) =>
+    req<{ device: Device; setup: SetupGuide; synced: boolean }>('POST', `/devices/${id}/client-id`),
   setup: (id: string) => req<SetupGuide>('GET', `/devices/${id}/setup`),
   activity: (id: string) => req<ActivityGroup[]>('GET', `/devices/${id}/activity`),
   suggestions: (deviceId?: string) =>
@@ -544,7 +554,7 @@ export const api = {
   decisions: () => req<Decision[]>('GET', '/decisions'),
   blocked: () => req<BlockedDomain[]>('GET', '/blocked'),
   blockedByList: (deviceId?: string | null, hours = 24) =>
-    req<{ active: boolean; hours: number; domains: ListBlocked[] }>('GET', `/blocked/by-list${qs({ device_id: deviceId, hours })}`),
+    req<{ active: boolean; home_off: boolean; hours: number; domains: ListBlocked[] }>('GET', `/blocked/by-list${qs({ device_id: deviceId, hours })}`),
   domain: (name: string, deviceId?: string | null) =>
     req<DomainDetail>('GET', `/domains/${encodeURIComponent(name)}${qs({ device_id: deviceId })}`),
   alerts: () => req<Alert[]>('GET', '/alerts'),
@@ -556,7 +566,8 @@ export const api = {
     req<{ queries: LiveQuery[]; last_poll: string | null; poll_error: string | null }>('GET', `/live/queries${qs(f)}`),
   liveClients: (minutes = 60) => req<NetworkClient[]>('GET', `/live/clients${qs({ minutes })}`),
   settings: () => req<Settings>('GET', '/settings'),
-  patchSettings: (b: Partial<Settings>) => req<Settings>('PATCH', '/settings', b),
+  /** synced: false when the DNS server couldn't be updated yet (it retries by itself) */
+  patchSettings: (b: Partial<Settings>) => req<Settings & { synced?: boolean }>('PATCH', '/settings', b),
   pollNow: () => req<{ ok: boolean }>('POST', '/poll-now'),
   providers: () => req<{ isps: IspGuide[]; routers: RouterGuide[] }>('GET', '/providers'),
   detectProvider: () => req<ProviderDetection>('GET', '/network/provider'),

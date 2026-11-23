@@ -20,7 +20,7 @@ async def view_domain(
     try:
         return domain_detail(
             e.conn, e.user_id, name, blocklist=e.blocklist, blocklist_active=e.sync.blocklist_active,
-            lists=e.lists, device_id=device_id, hours=hours,
+            home_uses_list=e.home_uses_list, lists=e.lists, device_id=device_id, hours=hours,
         )
     except ValueError as ex:
         raise HTTPException(422, str(ex)) from None
@@ -35,6 +35,7 @@ async def blocked_by_list(
         get_device(e, device_id)
     return {
         "active": e.sync.blocklist_active,
+        "home_off": not e.home_uses_list,  # switched off in Settings: what's listed below was turned away before that
         "hours": hours,
         "domains": list_blocked(e.conn, e.user_id, e.blocklist, device_id=device_id, hours=hours),
     }

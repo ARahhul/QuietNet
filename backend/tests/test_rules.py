@@ -10,6 +10,7 @@ from pahra.adguard.rules import (
     assert_client_scoped,
     build_adguard_rule,
     compile_section,
+    optout_rule,
     rule_clients,
     splice_section,
 )
@@ -21,13 +22,24 @@ def test_never_builds_rule_without_client():
 
 
 def test_rule_shapes_match_spec():
-    assert build_adguard_rule("alphonso.tv", ["rahhul-tv"]) == "||alphonso.tv^$client='rahhul-tv'"
+    # `important`: a home's own rules outrank the shared lists, and a home that switched the shared list off
+    assert build_adguard_rule("alphonso.tv", ["rahhul-tv"]) == "||alphonso.tv^$client='rahhul-tv',important"
     assert (
         build_adguard_rule("alphonso.tv", ["rahhul-tv", "rahhul-phone", "rahhul-laptop"])
-        == "||alphonso.tv^$client='rahhul-laptop'|'rahhul-phone'|'rahhul-tv'"
+        == "||alphonso.tv^$client='rahhul-laptop'|'rahhul-phone'|'rahhul-tv',important"
     )
-    assert build_adguard_rule("lgtvsdp.com", ["rahhul-tv"], "allow") == "@@||lgtvsdp.com^$client='rahhul-tv'"
-    assert build_adguard_rule("x.com", ["a"], "quarantine") == "||x.com^$client='a'"
+    assert build_adguard_rule("lgtvsdp.com", ["rahhul-tv"], "allow") == "@@||lgtvsdp.com^$client='rahhul-tv',important"
+    assert build_adguard_rule("x.com", ["a"], "quarantine") == "||x.com^$client='a',important"
+    assert rule_clients("||x.com^$client='a'|'b',important") == ["a", "b"]
+
+
+def test_optout_rule_lets_everything_through_for_those_devices_only():
+    assert optout_rule(["tv-x", "phone-y", "tv-x"]) == "@@||*^$client='phone-y'|'tv-x'"
+    assert_client_scoped(optout_rule(["a"]))
+    with pytest.raises(RuleSecurityError):
+        optout_rule([])
+    with pytest.raises(ValueError):
+        optout_rule(["a'|'*"])
 
 
 @pytest.mark.parametrize("bad", ["Rahhul TV", "a'|'*", "x,important", "", "-x", "a" * 64])
@@ -72,5 +84,5 @@ def test_splice_keeps_operator_rules_and_replaces_section():
     existing = ["||operator-own.com^", SECTION_BEGIN, "||old.com^$client='a'", SECTION_END]
     new = compile_section([build_adguard_rule("new.com", ["a"])])
     out = splice_section(existing, new)
-    assert out == ["||operator-own.com^", SECTION_BEGIN, "||new.com^$client='a'", SECTION_END]
+    assert out == ["||operator-own.com^", SECTION_BEGIN, "||new.com^$client='a',important", SECTION_END]
     assert splice_section(out, new) == out

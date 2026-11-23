@@ -85,6 +85,23 @@ class Settings(BaseSettings):
     langfuse_base_url: str = "https://cloud.langfuse.com"
     langfuse_environment: str = "development"
 
+    # "production" on a public server: the backend then refuses to start with development defaults (check_production)
+    env: str = "dev"
+
+    def check_production(self) -> list[str]:
+        """What makes this config unsafe on a public server (empty = fine). CORS isn't checked: the cloud allows the
+        local dashboard (localhost:5173) on purpose."""
+        problems = []
+        if self.api_token == "dev-token" or len(self.api_token) < 32:
+            problems.append("API_TOKEN is the development token or shorter than 32 characters")
+        if self.adguard_pass == "change-me":
+            problems.append("ADGUARD_PASS is still 'change-me'")
+        if self.firebase_auth_emulator_host:
+            problems.append("FIREBASE_AUTH_EMULATOR_HOST is set, so unsigned sign-ins would be accepted")
+        if self.api_docs:
+            problems.append("API_DOCS is on, which publishes a map of every endpoint")
+        return problems
+
     @property
     def cache_dir(self) -> Path:
         p = Path(self.lists_cache_dir)

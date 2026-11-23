@@ -1,6 +1,6 @@
 import { CheckCircle2, Loader2, Search, ShieldQuestion, Wrench } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { apiUrl, bearer, withToken } from '../../api'
+import { apiUrl, bearer, withTicket } from '../../api'
 import { CopyField, Roll } from '../ui'
 
 /** Event protocol streamed by GET /api/assistant/sessions/{id}/stream (SSE, JSON per message). */
@@ -41,17 +41,29 @@ export default function AssistantPanel({ onConnected }: { onConnected?: () => vo
 
   useEffect(() => {
     if (!sid) return
-    const es = new EventSource(withToken(`/assistant/sessions/${sid}/stream`))
-    es.onmessage = (m) => {
-      const ev = JSON.parse(m.data) as AssistantEvent
-      setEvents((xs) => [...xs, ev])
-      if (ev.type === 'done') {
-        es.close()
-        if (ev.outcome === 'connected') onConnected?.()
-      }
+    let es: EventSource | null = null
+    let gone = false
+    // EventSource can't send the sign-in, so it opens with a two-minute ticket; it never reconnects (onerror closes it)
+    withTicket(`/assistant/sessions/${sid}/stream`)
+      .then((url) => {
+        if (gone) return
+        const source = new EventSource(url)
+        es = source
+        source.onmessage = (m) => {
+          const ev = JSON.parse(m.data) as AssistantEvent
+          setEvents((xs) => [...xs, ev])
+          if (ev.type === 'done') {
+            source.close()
+            if (ev.outcome === 'connected') onConnected?.()
+          }
+        }
+        source.onerror = () => source.close()
+      })
+      .catch((e) => setErr((e as Error).message))
+    return () => {
+      gone = true
+      es?.close()
     }
-    es.onerror = () => es.close()
-    return () => es.close()
   }, [sid, onConnected])
 
   useEffect(() => {

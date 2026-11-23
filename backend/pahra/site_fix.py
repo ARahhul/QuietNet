@@ -21,7 +21,7 @@ import time
 from datetime import datetime, timezone
 
 from .adguard.rules import validate_domain
-from .db import now_iso
+from .db import now_iso, transaction
 from .decisions import active_decision, create_decision
 from .pipeline.explainer import Image
 from .pipeline.lists import parents
@@ -364,21 +364,22 @@ def unblock(conn: sqlite3.Connection, user_id: str, names: list[str], device_id:
     """Let `names` through for one device or the whole household. Returns the allow decisions and the rules they
     replaced (undoing the unblock puts those back: POST /decisions/undo-bulk with `restore`)."""
     made, replaced = [], []
-    for raw in dict.fromkeys(names):
-        name = validate_domain(raw)
-        before = active_decision(conn, name, device_id, user_id)
-        if before and before["action"] == "allow":
-            continue
-        if before:
-            replaced.append(before["id"])  # create_decision below supersedes it
-        if device_id is None:
-            # A household unblock also lifts the same name's per-device blocks and holds
-            for r in conn.execute(
-                "SELECT d.id FROM decisions d JOIN devices v ON v.id = d.device_id WHERE v.user_id = ? AND d.domain = ? "
-                "AND d.undone_at IS NULL AND d.action IN ('block', 'quarantine')",
-                (user_id, name),
-            ).fetchall():
-                conn.execute("UPDATE decisions SET undone_at = ? WHERE id = ?", (now_iso(), r["id"]))
-                replaced.append(r["id"])
-        made.append(create_decision(conn, user_id, name, "allow", device_id, "user"))
+    names = [validate_domain(raw) for raw in dict.fromkeys(names)]  # a bad name refuses the whole request up front
+    with transaction(conn):  # every name or none of them
+        for name in names:
+            before = active_decision(conn, name, device_id, user_id)
+            if before and before["action"] == "allow":
+                continue
+            if before:
+                replaced.append(before["id"])  # create_decision below supersedes it
+            if device_id is None:
+                # A household unblock also lifts the same name's per-device blocks and holds
+                for r in conn.execute(
+                    "SELECT d.id FROM decisions d JOIN devices v ON v.id = d.device_id WHERE v.user_id = ? "
+                    "AND d.domain = ? AND d.undone_at IS NULL AND d.action IN ('block', 'quarantine')",
+                    (user_id, name),
+                ).fetchall():
+                    conn.execute("UPDATE decisions SET undone_at = ? WHERE id = ?", (now_iso(), r["id"]))
+                    replaced.append(r["id"])
+            made.append(create_decision(conn, user_id, name, "allow", device_id, "user"))
     return {"decisions": made, "replaced": replaced}

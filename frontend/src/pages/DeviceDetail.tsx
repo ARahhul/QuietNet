@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Radio, Trash2 } from 'lucide-react'
+import { ArrowLeft, Radio, RefreshCw, Trash2 } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import DoneCheck from '../components/DoneCheck'
@@ -10,6 +10,19 @@ import { CategoryChip, DeviceIcon, Eyebrow, RiskBar, Roll, timeAgo, useToast } f
 
 /** Plain DNS: recognised by the home's public IP, so it needs that address kept current. */
 const PLAIN = ['ipv4_demo', 'ipv6']
+
+/** What changing a device's address (ClientID) means for it: a plain-DNS device is known by the home's internet
+ * address and the laptop relay updates itself, so only the others need the new address entered. */
+function addressChange(name: string, method: string) {
+  if (PLAIN.includes(method))
+    return { ask: `Give ${name} a new address? It keeps working: QuietNet knows it by your home's internet address.`, done: 'New address ready. Nothing to change on the device.' }
+  if (method === 'forwarder')
+    return { ask: `Give ${name} a new address? The laptop relay switches to it by itself.`, done: 'New address ready. The laptop relay uses it now.' }
+  return {
+    ask: `Give ${name} a new address? It can't look anything up until you enter the new address on it.`,
+    done: 'New address ready. Enter it on the device using the steps below.',
+  }
+}
 
 export default function DeviceDetail() {
   const { id = '' } = useParams()
@@ -37,6 +50,16 @@ export default function DeviceDetail() {
       qc.invalidateQueries({ queryKey: ['devices'] })
       nav('/devices')
     },
+  })
+  const readdress = useMutation({
+    mutationFn: () => api.changeDeviceAddress(id),
+    onSuccess: (r) => {
+      qc.setQueryData(['setup', id], r.setup)
+      qc.invalidateQueries({ queryKey: ['device', id] })
+      qc.invalidateQueries({ queryKey: ['devices'] })
+      toast({ text: addressChange(r.device.name, r.device.setup_method).done })
+    },
+    onError: (e) => toast({ text: (e as Error).message }),
   })
 
   const d = device.data
@@ -109,6 +132,19 @@ export default function DeviceDetail() {
           <Eyebrow className="mt-10">Connection settings</Eyebrow>
           <div className="card mt-4 max-w-3xl p-5">
             <SetupSteps deviceId={d.id} guide={setup.data} brand={d.brand} />
+          </div>
+          <div className="mt-3 flex max-w-3xl flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted">
+            <span>
+              Address <span className="font-mono text-xs text-white">{d.client_id}</span>
+            </span>
+            <button
+              className="btn-ghost px-2.5 py-1 text-xs"
+              disabled={readdress.isPending}
+              onClick={() => confirm(addressChange(d.name, d.setup_method).ask) && readdress.mutate()}
+            >
+              <Roll><RefreshCw className="h-3.5 w-3.5" /> Change address</Roll>
+            </button>
+            <span className="text-xs">Do this if someone else may know the address.</span>
           </div>
           {PLAIN.includes(d.setup_method) && (
             <div className="mt-4 grid max-w-3xl gap-4">

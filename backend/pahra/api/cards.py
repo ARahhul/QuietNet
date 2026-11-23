@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from ..adguard.client import AdGuardError
-from ..db import rows_to_dicts
-from ..decisions import DecisionError, create_decision, get_decision, reinstate, undo_decision
+from ..db import rows_to_dicts, transaction
+from ..decisions import DecisionError, create_decision, reinstate, undo_decision
 from ..engine import Engine
 from ..knowledge import is_must_allow_any_device
 from ..queries import CONF_RANK, blocked_domains, suggestions
@@ -32,7 +32,7 @@ class BulkIn(BaseModel):
 
 
 class UndoBulkIn(BaseModel):
-    ids: list[str]
+    ids: list[str] = Field(max_length=500)
     # Decisions the undone ones replaced, to put back (undoing an unblock restores the block it lifted)
     restore: list[str] = Field(default_factory=list, max_length=200)
 
@@ -87,12 +87,16 @@ async def decide_bulk(body: BulkIn, e: Engine = Depends(engine)):
     limit = CONF_RANK[body.min_confidence]
     shown = set(body.domains) if body.domains is not None else None
     created = []
-    for c in cards:
-        if shown is not None and c["domain"] not in shown:
-            continue
-        if c["category"] not in body.categories or CONF_RANK.get(c["confidence"], 3) > limit or c["must_allow"]:
-            continue
-        created.append(create_decision(e.conn, e.user_id, c["domain"], "block", body.device_id, "user"))
+    try:
+        with transaction(e.conn):  # all of the cards or none of them
+            for c in cards:
+                if shown is not None and c["domain"] not in shown:
+                    continue
+                if c["category"] not in body.categories or CONF_RANK.get(c["confidence"], 3) > limit or c["must_allow"]:
+                    continue
+                created.append(create_decision(e.conn, e.user_id, c["domain"], "block", body.device_id, "user"))
+    except (DecisionError, ValueError) as ex:
+        raise HTTPException(422, str(ex))
     return {"decisions": created, "count": len(created), "synced": await _push(e)}
 
 
@@ -107,9 +111,15 @@ async def undo(decision_id: str, e: Engine = Depends(engine)):
 
 @router.post("/decisions/undo-bulk")
 async def undo_bulk(body: UndoBulkIn, e: Engine = Depends(engine)):
-    out = []
-    for i in body.ids:
-        if get_decision(e.conn, i):
-            out.append(undo_decision(e.conn, e.user_id, i))
-    restored = [d for i in body.restore if (d := reinstate(e.conn, e.user_id, i))]
+    """Undo this home's decisions among `ids`. IDs that aren't this home's (or don't exist) are skipped."""
+    ids = list(dict.fromkeys(body.ids))
+    mine = {
+        r["id"]
+        for r in e.conn.execute(
+            f"SELECT id FROM decisions WHERE user_id = ? AND id IN ({','.join('?' * len(ids))})", (e.user_id, *ids)
+        )
+    } if ids else set()
+    with transaction(e.conn):
+        out = [undo_decision(e.conn, e.user_id, i) for i in ids if i in mine]
+        restored = [d for i in body.restore if (d := reinstate(e.conn, e.user_id, i))]
     return {"count": len(out), "restored": len(restored), "synced": await _push(e)}

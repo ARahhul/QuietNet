@@ -47,6 +47,7 @@ def domain_detail(
     blocklist: BlocklistIndex,
     blocklist_active: bool,
     lists: ListIndex,
+    home_uses_list: bool = True,
     device_id: str | None = None,
     hours: int = 24,
 ) -> dict:
@@ -93,7 +94,7 @@ def domain_detail(
         entry = blocklist.match(domain, list(looked_up))
         if entry is not None:
             covered = [n for n in looked_up if n != domain]
-    listed = entry is not None and entry.in_adguard and blocklist_active
+    listed = entry is not None and entry.in_adguard and blocklist_active and home_uses_list
     fast = fast_check(lists, name)
     clean = blocklist.clean_match(domain)
     must_allow = is_must_allow_any_device(name)
@@ -151,9 +152,10 @@ def domain_detail(
         reasons.append({
             "kind": "blocklist", "title": "On QuietNet's ad & tracker list",
             "detail": f"Known {what} domain{f' run by {entry.owner}' if entry.owner else ''}. "
-            "Blocked for every home on the very first lookup, without asking the AI.",
+            + ("Blocked on the very first lookup, without asking the AI." if home_uses_list
+               else "You switched this list off for your home in Settings, so it doesn't block it here."),
             "category": entry.category, "owner": entry.owner, "sources": list(entry.sources), "notes": entry.notes,
-            "active": blocklist_active, "names": covered,
+            "active": blocklist_active and home_uses_list, "home_off": not home_uses_list, "names": covered,
         })
     if fast.threat_hits:
         reasons.append({

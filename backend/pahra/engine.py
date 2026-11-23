@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import secrets
 import sqlite3
 from collections.abc import Iterable
 from pathlib import Path
@@ -60,6 +61,7 @@ class Engine:
         self.home_follow: dict[str, dict] = {}  # device id -> last Dynamic DNS check (pahra.home_address)
         self._tasks: list[asyncio.Task] = []
         self._pipeline_lock = asyncio.Lock()
+        self.ticket_key = secrets.token_bytes(32)  # signs two-minute link tickets (pahra.tickets); memory only
 
     def _initial_lists(self) -> ListIndex:
         if self.settings.offline_lists:

@@ -1,6 +1,7 @@
 import { Download } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
-import { withToken, type DeviceType, type SetupGuide } from '../api'
+import { useState } from 'react'
+import { withTicket, type DeviceType, type SetupGuide } from '../api'
 import { CopyField, Roll } from './ui'
 
 export default function SetupSteps({
@@ -17,6 +18,16 @@ export default function SetupSteps({
   const v = guide.values
   const apple = (brand ?? '').toLowerCase() === 'apple'
   const router = type === 'router'
+  const [profileError, setProfileError] = useState<string | null>(null)
+  // Safari installs a profile from a link it follows, which can't carry the sign-in: follow one with a short ticket
+  const downloadProfile = () => {
+    setProfileError(null)
+    withTicket(`/devices/${deviceId}/profile.mobileconfig`)
+      .then((url) => {
+        window.location.href = url
+      })
+      .catch((e) => setProfileError((e as Error).message))
+  }
   return (
     <div className="grid gap-4">
       {guide.method === 'dot' && router && (
@@ -34,9 +45,12 @@ export default function SetupSteps({
         </div>
       )}
       {guide.method === 'doh' && apple && (
-        <a className="btn-primary w-fit" href={withToken(`/devices/${deviceId}/profile.mobileconfig`)}>
-          <Roll><Download className="h-4 w-4" /> Download profile</Roll>
-        </a>
+        <div className="grid gap-1">
+          <button type="button" className="btn-primary w-fit" onClick={downloadProfile}>
+            <Roll><Download className="h-4 w-4" /> Download profile</Roll>
+          </button>
+          {profileError && <p className="text-xs text-danger">{profileError}</p>}
+        </div>
       )}
       {guide.method === 'doh' && <CopyField label="DNS-over-HTTPS URL" value={v.doh_url} />}
       {guide.method === 'doh' && !apple && v.server_ip && <CopyField label="DNS server IP" value={v.server_ip} />}
