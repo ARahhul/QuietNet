@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ImagePlus, Loader2, SearchCheck, ShieldOff, TriangleAlert, Wrench, X } from 'lucide-react'
+import { Baby, ImagePlus, Loader2, SearchCheck, ShieldOff, TriangleAlert, Wrench, X } from 'lucide-react'
 import { useCallback, useRef, useState, type ClipboardEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { api, type SiteCandidate, type SiteFix as Fix } from '../api'
 import { shrink } from '../lib/image'
 import { ConfidenceChip, Roll, timeAgo, useToast } from './ui'
@@ -186,6 +187,14 @@ export default function SiteFix({ deviceId, deviceName }: { deviceId?: string; d
           )}
           {result.already_unblocked.length > 0 && (
             <p className="mt-2 text-xs text-muted">Already let through since then: {result.already_unblocked.join(', ')}</p>
+          )}
+          {result.parental?.length > 0 && (
+            <p className="mt-2 flex flex-wrap items-center gap-1 text-xs text-muted">
+              <Baby className="h-3.5 w-3.5 text-sentry" /> Blocked by parental controls: {result.parental.join(', ')}.{' '}
+              <Link to="/parental" className="underline-slide text-guard">
+                Change them on the Parental page
+              </Link>
+            </p>
           )}
           {result.candidates.length > 0 && (
             <>

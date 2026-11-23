@@ -97,6 +97,49 @@ def is_rescue_catch_all(rule: str) -> bool:
     return rule.startswith("||*^$client=~'")
 
 
+# --- parental controls ---------------------------------------------------------------------------------------------
+# Parental rules carry `important`, so a household allow (`@@`, e.g. from "Site not working?") can't undo a parent's
+# block: in AdGuard an `important` blocking rule beats a plain allow. Nothing else QuietNet writes uses `important`.
+PARENTAL_SUFFIX = ",important"
+
+
+def _scope(client_ids: list[str]) -> str:
+    if not client_ids:
+        raise RuleSecurityError("SECURITY VIOLATION: Never push a global rule without $client!")
+    ids = sorted({validate_client_id(c) for c in client_ids})
+    return "$client=" + "|".join(f"'{cid}'" for cid in ids) + PARENTAL_SUFFIX
+
+
+def build_parental_rule(domain: str, client_ids: list[str]) -> str:
+    """Block `domain` (and its subdomains) for these devices, whatever allows they have."""
+    return f"||{validate_domain(domain)}^{_scope(client_ids)}"
+
+
+def internet_off_rules(client_ids: list[str], essentials: list[str]) -> list[str]:
+    """Bedtime "internet off": block every name for these devices except the essentials (calls, clocks, the OS
+    checking it's online), which an `important` allow lets through."""
+    scope = _scope(client_ids)
+    return [f"||*^{scope}", *(f"@@||{validate_domain(n)}^{scope}" for n in sorted(set(essentials)))]
+
+
+def is_parental_rule(rule: str) -> bool:
+    return "$client=" in rule and rule.endswith(PARENTAL_SUFFIX)
+
+
+_SERVICE_RULE_RE = re.compile(r"^\|\|([a-z0-9_.-]+)\^$")
+
+
+def service_domains(rules: list[str]) -> list[str]:
+    """The domains in one of AdGuard's blocked-service definitions (`||tiktok.com^` ...). Anything else (wildcards,
+    modifiers) is skipped: we only write rule shapes we can scope and check."""
+    out: list[str] = []
+    for r in rules:
+        m = _SERVICE_RULE_RE.match((r or "").strip().lower())
+        if m and DOMAIN_RE.match(m.group(1)):
+            out.append(m.group(1))
+    return sorted(set(out))
+
+
 def compile_section(rules: list[str], rescue: list[str] | None = None) -> list[str]:
     """Deterministic, de-duplicated QuietNet-managed block of user rules (rescue rules first)."""
     body = sorted(set(rules))

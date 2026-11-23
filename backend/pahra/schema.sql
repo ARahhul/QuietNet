@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS queries (
     client_ip   TEXT,                            -- source address AdGuard saw
     proto       TEXT,                            -- dot | doh | dns | ...
     status      TEXT NOT NULL,                   -- blocked | cached | allowed
-    blocked_by  TEXT,                            -- rule (your QuietNet rules) | list (AdGuard filter lists)
+    blocked_by  TEXT,                            -- rule (your QuietNet rules) | list (AdGuard filter lists) | parental
     upstream    TEXT,
     elapsed_ms  REAL
 );
@@ -100,6 +100,25 @@ CREATE TABLE IF NOT EXISTS alerts (
     read        INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT NOT NULL
 );
+
+-- Parental controls (pahra.parental). A device gets the household's rules (unless devices.skip_household), its kid
+-- profile's (devices.parental_profile_id) and its own (kind 'device'): they add up, none loosens another.
+CREATE TABLE IF NOT EXISTS parental_profiles (
+    id                    TEXT PRIMARY KEY,
+    user_id               TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind                  TEXT NOT NULL,          -- household | kid | device
+    name                  TEXT NOT NULL,
+    device_id             TEXT REFERENCES devices(id) ON DELETE CASCADE,   -- kind 'device' only
+    adult                 INTEGER NOT NULL DEFAULT 0,   -- AdGuard's adult-site filter
+    safe_search           INTEGER NOT NULL DEFAULT 0,   -- SafeSearch + YouTube restricted mode
+    apps                  TEXT NOT NULL DEFAULT '[]',   -- JSON: AdGuard blocked-service ids, blocked all the time
+    bedtime_apps          TEXT NOT NULL DEFAULT '[]',   -- JSON: blocked only at bedtime
+    bedtime_internet_off  INTEGER NOT NULL DEFAULT 0,   -- at bedtime: everything but the essentials
+    bedtime               TEXT,                         -- JSON {nights: [0=Sun..6], start: "HH:MM", end: "HH:MM"} | NULL
+    created_at            TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_parental_household ON parental_profiles(user_id) WHERE kind = 'household';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_parental_device ON parental_profiles(device_id) WHERE kind = 'device';
 
 -- Small key/value store (query-log cursor, list refresh times ...)
 CREATE TABLE IF NOT EXISTS meta (

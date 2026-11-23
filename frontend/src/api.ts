@@ -203,6 +203,8 @@ export interface SiteFix {
   note: string
   /** blocked then, but let through since */
   already_unblocked: string[]
+  /** blocked by parental controls: changed on the Parental page, never unblocked here */
+  parental: string[]
   ai: boolean
 }
 
@@ -266,8 +268,8 @@ export interface LiveQuery {
   qtype: string | null
   /** cached answers are allowed too; they just never left the server */
   status: 'blocked' | 'allowed' | 'cached'
-  /** rule: one of your QuietNet rules; list: a filter list on the DNS server */
-  blocked_by: 'rule' | 'list' | null
+  /** rule: one of your QuietNet rules; list: a filter list on the DNS server; parental: parental controls */
+  blocked_by: 'rule' | 'list' | 'parental' | null
   upstream: string | null
   elapsed_ms: number | null
   category: Category
@@ -428,9 +430,83 @@ export interface Report {
 export interface Settings {
   email: string
   auto_mode: boolean
+  /** IANA name: the clock parental-control bedtimes follow */
+  time_zone: string
   dns_hostname: string
   vm_ip: string
 }
+
+// ---------- parental controls (backend pahra.parental) ----------
+/** 0 = Sunday … 6 = Saturday: the nights bedtime starts on. start after end runs overnight (22:00 → 07:00). */
+export interface Bedtime {
+  nights: number[]
+  start: string
+  end: string
+}
+
+/** One layer of rules. A device gets the household's (unless it skips them), its kid profile's and its own: they add up. */
+export interface ParentalProfile {
+  id: string
+  kind: 'household' | 'kid' | 'device'
+  name: string
+  /** AdGuard's adult-site filter */
+  adult: boolean
+  /** SafeSearch on Google, Bing, DuckDuckGo… and YouTube restricted mode */
+  safe_search: boolean
+  /** app ids (AdGuard blocked services) blocked all the time */
+  apps: string[]
+  /** app ids blocked only at bedtime */
+  bedtime_apps: string[]
+  /** at bedtime: everything but the essentials */
+  bedtime_internet_off: boolean
+  bedtime: Bedtime | null
+  /** this profile's bedtime is on right now */
+  bedtime_now: boolean
+}
+
+/** What's blocked on a device right now, all layers added up */
+export interface ParentalNow {
+  adult: boolean
+  safe_search: boolean
+  apps: string[]
+  internet_off: boolean
+  bedtime: boolean
+}
+
+export interface ParentalDevice {
+  id: string
+  name: string
+  type: DeviceType
+  /** its kid profile */
+  profile_id: string | null
+  /** a parent's device: the household's rules don't apply */
+  skip_household: boolean
+  /** rules of its own, or null */
+  own: ParentalProfile | null
+  now: ParentalNow
+}
+
+export interface ParentalOverview {
+  time_zone: string
+  household: ParentalProfile
+  kids: (ParentalProfile & { devices: string[] })[]
+  devices: ParentalDevice[]
+  /** what still works when bedtime turns the internet off */
+  essentials: string[]
+}
+
+/** An app or site parental controls can block (AdGuard's blocked-service catalog) */
+export interface ParentalService {
+  id: string
+  name: string
+  /** gaming, social_network, streaming, gambling… ('' on older AdGuard) */
+  group: string
+  /** base64 SVG */
+  icon_svg: string
+}
+
+export type ProfileChange = Partial<Pick<ParentalProfile, 'name' | 'adult' | 'safe_search' | 'apps' | 'bedtime_apps' | 'bedtime_internet_off' | 'bedtime'>>
+type ParentalChanged = ParentalOverview & { synced: boolean }
 
 // ---------- calls ----------
 /** Who this browser is signed in as, on the server's side */
@@ -493,4 +569,11 @@ export const api = {
     req<{ decisions: Decision[]; replaced: string[]; count: number; synced: boolean }>('POST', '/sites/unblock', b),
   cgnat: (router_wan_ip: string) =>
     req<{ public_ip: string | null; cgnat: boolean | null; advice: string }>('POST', '/network/cgnat', { router_wan_ip }),
+  parental: () => req<ParentalOverview>('GET', '/parental'),
+  parentalServices: () => req<ParentalService[]>('GET', '/parental/services'),
+  createKidProfile: (name: string) => req<ParentalOverview & { created: string }>('POST', '/parental/profiles', { name }),
+  patchParentalProfile: (id: string, b: ProfileChange) => req<ParentalChanged>('PATCH', `/parental/profiles/${id}`, b),
+  deleteKidProfile: (id: string) => req<ParentalChanged>('DELETE', `/parental/profiles/${id}`),
+  patchParentalDevice: (id: string, b: { profile_id?: string | null; skip_household?: boolean; own_rules?: boolean }) =>
+    req<ParentalChanged>('PATCH', `/parental/devices/${id}`, b),
 }

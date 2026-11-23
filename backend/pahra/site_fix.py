@@ -96,7 +96,7 @@ def blocked_names(conn: sqlite3.Connection, user_id: str, since: float, device_i
         "SELECT q.qname, q.device_id, v.name AS device_name, COUNT(*) AS n, MAX(q.t) AS last, "
         "SUM(IFNULL(q.blocked_by, 'list') = 'list') AS by_list, d.category, d.owner "
         "FROM queries q JOIN devices v ON v.id = q.device_id LEFT JOIN domains d ON d.domain = q.domain "
-        "WHERE v.user_id = ? AND q.t >= ? AND q.status = 'blocked'"
+        "WHERE v.user_id = ? AND q.t >= ? AND q.status = 'blocked' AND IFNULL(q.blocked_by, '') != 'parental'"
     )
     args: list = [user_id, since]
     if device_id:
@@ -131,6 +131,21 @@ def blocked_names(conn: sqlite3.Connection, user_id: str, since: float, device_i
         e["blocked_by"] = ("held" if rule["action"] == "quarantine" else "auto" if rule["decided_by"] == "auto" else "yours") if rule else "list"
         still.append(e)
     return still, sorted(since_let)
+
+
+def parental_names(conn: sqlite3.Connection, user_id: str, since: float, device_id: str | None = None) -> list[str]:
+    """Names parental controls blocked since `since` (for the household, or one device). These aren't offered for
+    unblocking: a parent changes them on the Parental page."""
+    sql = (
+        "SELECT q.qname, COUNT(*) AS n FROM queries q JOIN devices v ON v.id = q.device_id "
+        "WHERE v.user_id = ? AND q.t >= ? AND q.status = 'blocked' AND q.blocked_by = 'parental'"
+    )
+    args: list = [user_id, since]
+    if device_id:
+        sql += " AND q.device_id = ?"
+        args.append(device_id)
+    rows = conn.execute(sql + " GROUP BY q.qname ORDER BY n DESC LIMIT 20", args).fetchall()
+    return list(dict.fromkeys(r["qname"].strip(".").lower() for r in rows if r["qname"]))
 
 
 def answered_names(conn: sqlite3.Connection, user_id: str, since: float, device_id: str | None, words: list[str]) -> list[dict]:
@@ -282,6 +297,7 @@ async def find(
     since = now - minutes * 60 - SLACK_S
     dev_id = device["id"] if device else None
     entries, since_let = blocked_names(conn, user_id, since, dev_id)
+    by_parental = parental_names(conn, user_id, since, dev_id)
     words = keywords(what)
     who = device["name"] if device else "your devices"
     base = {
@@ -293,8 +309,14 @@ async def find(
         "not_quietnet": False,
         "note": "",
         "already_unblocked": since_let[:10],
+        "parental": by_parental[:10],  # blocked by parental controls: changed on the Parental page, not here
         "ai": False,
     }
+    if not entries and by_parental:
+        return base | {
+            "summary": f"Parental controls blocked {len(by_parental)} name{'s' if len(by_parental) != 1 else ''} for {who} "
+            "around then. To let them through, change the rules on the Parental page.",
+        }
     if not entries:
         working = answered_names(conn, user_id, since, dev_id, words)
         if not working:
@@ -350,9 +372,25 @@ async def find(
     return base | got | {"ai": True}
 
 
+class ParentalBlock(ValueError):
+    """A name parental controls block: an allow can't lift it (their rules are `important`)."""
+
+
+PARENTAL_LOOKBACK_S = 3600
+
+
 def unblock(conn: sqlite3.Connection, user_id: str, names: list[str], device_id: str | None = None) -> dict:
     """Let `names` through for one device or the whole household. Returns the allow decisions and the rules they
-    replaced (undoing the unblock puts those back: POST /decisions/undo-bulk with `restore`)."""
+    replaced (undoing the unblock puts those back: POST /decisions/undo-bulk with `restore`).
+
+    For one device, names its parental controls blocked in the last hour are refused (ParentalBlock): a parent changes
+    those rules. A household unblock goes ahead: it can't lift a parental block (those rules are `important`), so it
+    only lets the name through where nothing parental blocks it."""
+    held = set(parental_names(conn, user_id, time.time() - PARENTAL_LOOKBACK_S, device_id)) if device_id else set()
+    if hit := [n for n in dict.fromkeys(x.strip(".").lower() for x in names) if n in held]:
+        raise ParentalBlock(
+            f"Parental controls block {', '.join(hit[:3])}. Change it on the Parental page instead."
+        )
     made, replaced = [], []
     for raw in dict.fromkeys(names):
         name = validate_domain(raw)

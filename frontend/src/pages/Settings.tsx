@@ -3,7 +3,7 @@ import { LogIn, LogOut, UserRound } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { CREDITS } from '../lib/credits'
-import { Eyebrow, Roll, timeAgo } from '../components/ui'
+import { Eyebrow, Roll, Toggle, timeAgo } from '../components/ui'
 import { firebaseEnabled, signOut, useSession } from '../session'
 
 export default function Settings() {
@@ -30,14 +30,7 @@ export default function Settings() {
             The rest wait in Suggestions. You get a notification and can undo any time.
           </div>
         </div>
-        <button
-          role="switch"
-          aria-checked={!!s?.auto_mode}
-          onClick={() => s && patch.mutate({ auto_mode: !s.auto_mode })}
-          className={`relative h-7 w-12 shrink-0 rounded-full border transition ${s?.auto_mode ? 'border-brand bg-brand' : 'border-line bg-panel-2'}`}
-        >
-          <span className={`absolute top-[3px] h-5 w-5 rounded-full bg-white transition-all ${s?.auto_mode ? 'left-[23px]' : 'left-[3px]'}`} />
-        </button>
+        <Toggle checked={!!s?.auto_mode} onChange={(on) => s && patch.mutate({ auto_mode: on })} label="Auto-mode" />
       </div>
 
       <Eyebrow className="mt-10">System status</Eyebrow>

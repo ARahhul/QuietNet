@@ -37,6 +37,15 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE devices ADD COLUMN lan_ip TEXT")
     if "ddns_host" not in cols:
         conn.execute("ALTER TABLE devices ADD COLUMN ddns_host TEXT")
+    # Parental controls: the device's kid profile, and "skip the household's rules" (a parent's device)
+    if "parental_profile_id" not in cols:
+        conn.execute(
+            "ALTER TABLE devices ADD COLUMN parental_profile_id TEXT REFERENCES parental_profiles(id) ON DELETE SET NULL"
+        )
+    if "skip_household" not in cols:
+        conn.execute("ALTER TABLE devices ADD COLUMN skip_household INTEGER NOT NULL DEFAULT 0")
+    if "time_zone" not in users:
+        conn.execute("ALTER TABLE users ADD COLUMN time_zone TEXT")  # IANA name for bedtimes; NULL = DEFAULT_TIME_ZONE
 
 
 def now_iso() -> str:

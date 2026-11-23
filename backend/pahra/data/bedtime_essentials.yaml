@@ -1,0 +1,21 @@
+# What still works on a device while parental controls turn its internet off at bedtime (pahra.parental).
+# Each name covers its subdomains. Keep this short: everything not listed is blocked.
+essentials:
+  # WhatsApp messages and calls (a child can still reach family)
+  - whatsapp.net
+  - whatsapp.com
+  # The phone or laptop checking it's online (without these it shows "no internet" and may drop WiFi)
+  - connectivitycheck.gstatic.com
+  - connectivitycheck.android.com
+  - captive.apple.com
+  - msftconnecttest.com
+  - msftncsi.com
+  # Keeping the clock right
+  - time.android.com
+  - time.apple.com
+  - time.windows.com
+  - time.google.com
+  - ntp.org
+  # Notifications (alarms and calls still ring)
+  - mtalk.google.com
+  - push.apple.com

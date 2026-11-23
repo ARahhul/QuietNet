@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable
 
 from .adguard.client import AdGuardClient, AdGuardError
+from .adguard.rules import is_parental_rule
 from .db import get_meta, set_meta
 from .events import ingest_event
 from .pipeline.normalize import normalize_domain
@@ -150,7 +151,7 @@ class Poller:
             if not qname:
                 continue
             domain = normalize_domain(qname)
-            blocked = str(e.get("reason", "")).startswith("Filtered")
+            blocked = is_blocked(e)
             gap = ingest_event(self.conn, dev, domain, e["_t"], blocked)
             log_query(self.conn, dev, qname, domain, e, blocked)
             ob = observed.setdefault((dev, domain), Observed(dev, domain))
@@ -167,13 +168,28 @@ class Poller:
         return list(observed.values())
 
 
+def is_blocked(e: dict) -> bool:
+    """AdGuard's "Filtered…" reasons, except SafeSearch: that answers with the search engine's safe address."""
+    reason = str(e.get("reason", ""))
+    return reason.startswith("Filtered") and reason != "FilteredSafeSearch"
+
+
+def blocked_by_of(e: dict) -> str:
+    """rule (one of your QuietNet rules) | parental (parental controls) | list (an AdGuard filter list)."""
+    if e.get("reason") == "FilteredParental":
+        return "parental"
+    # rules from filter_list_id 0 are AdGuard's custom rules, which only QuietNet writes
+    custom = [(r or {}).get("text") or "" for r in (e.get("rules") or []) if not (r or {}).get("filter_list_id")]
+    if any(is_parental_rule(t) for t in custom):
+        return "parental"
+    return "rule" if custom else "list"
+
+
 def log_query(conn: sqlite3.Connection, device_id: str, qname: str, domain: str, e: dict, blocked: bool) -> None:
     """Keep one AdGuard query-log entry for the live view and the report charts."""
     if blocked:
         status = "blocked"
-        # rules from filter_list_id 0 are AdGuard's custom rules, which only QuietNet writes
-        ours = any(not (r or {}).get("filter_list_id") for r in (e.get("rules") or []))
-        blocked_by = "rule" if ours else "list"
+        blocked_by = blocked_by_of(e)
     else:
         status = "cached" if e.get("cached") else "allowed"
         blocked_by = None

@@ -107,6 +107,33 @@ export function FilterChip({ active, onClick, children }: { active: boolean; onC
   )
 }
 
+/** On/off switch (red when on). `label` names it for screen readers when no visible text does. */
+export function Toggle({
+  checked,
+  onChange,
+  label,
+  disabled,
+}: {
+  checked: boolean
+  onChange: (next: boolean) => void
+  label?: string
+  disabled?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative h-7 w-12 shrink-0 rounded-full border transition disabled:opacity-50 ${checked ? 'border-brand bg-brand' : 'border-line bg-panel-2'}`}
+    >
+      <span className={`absolute top-[3px] h-5 w-5 rounded-full bg-white transition-all ${checked ? 'left-[23px]' : 'left-[3px]'}`} />
+    </button>
+  )
+}
+
 /** Button content that rolls on hover (see the `roll` utility in index.css). The button needs overflow hidden; every btn-* has it. */
 export function Roll({ children }: { children: ReactNode }) {
   return <span className="roll">{children}</span>

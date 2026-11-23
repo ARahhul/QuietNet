@@ -70,7 +70,8 @@ class Engine:
             await self.pipeline.process(observed)
 
     async def _on_tick(self) -> None:
-        if self.sync.dirty:
+        # dirty: a push failed earlier. parental_changed: a bedtime started or ended since the last push.
+        if self.sync.dirty or self.sync.parental_changed():
             try:
                 await self.sync.sync_all()
             except AdGuardError:

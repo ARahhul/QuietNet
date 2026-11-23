@@ -15,11 +15,22 @@ import asyncio
 import json
 import logging
 import sqlite3
+from datetime import datetime, timedelta, timezone
 
+from .. import parental
 from ..config import Settings
 from ..db import get_meta, now_iso, set_meta
 from .client import AdGuardClient, AdGuardError
-from .rules import build_adguard_rule, compile_section, is_rescue_catch_all, rescue_rules, splice_section
+from .rules import (
+    build_adguard_rule,
+    compile_section,
+    is_rescue_catch_all,
+    rescue_rules,
+    service_domains,
+    splice_section,
+)
+
+SERVICES_MAX_AGE = timedelta(days=1)  # AdGuard's blocked-service catalog only changes with AdGuard updates
 
 log = logging.getLogger("pahra.sync")
 
@@ -52,6 +63,43 @@ class AdGuardSync:
         self.dirty = True
         self.last_ok: str | None = None
         self.last_error: str | None = None
+        self.parental_fp: str | None = None  # parental state last pushed (a bedtime starting changes it)
+
+    # ---------------------------------------------------------------- parental
+    async def service_catalog(self) -> list[dict]:
+        """AdGuard's blocked-service catalog (the apps parental controls can block), cached for a day. If AdGuard
+        can't be asked, the last copy (or nothing)."""
+        cached = get_meta(self.conn, "ag_services")
+        at = get_meta(self.conn, "ag_services_at")
+        fresh = at and datetime.now(timezone.utc) - datetime.fromisoformat(at) < SERVICES_MAX_AGE
+        if cached and fresh:
+            return json.loads(cached)
+        try:
+            catalog = [
+                {
+                    "id": s["id"],
+                    "name": s.get("name") or s["id"],
+                    "group": s.get("group_id") or "",
+                    "icon_svg": s.get("icon_svg") or "",
+                    "domains": service_domains(s.get("rules") or []),
+                }
+                for s in await self.ag.blocked_services_all()
+                if s.get("id")
+            ]
+        except AdGuardError as e:
+            log.warning("could not read AdGuard's blocked services: %s", e)
+            return json.loads(cached) if cached else []
+        if catalog:
+            set_meta(self.conn, "ag_services", json.dumps(catalog))
+            set_meta(self.conn, "ag_services_at", now_iso())
+        return catalog
+
+    async def _service_domains(self) -> dict[str, list[str]]:
+        return {s["id"]: s["domains"] for s in await self.service_catalog()}
+
+    def parental_changed(self, now: datetime | None = None) -> bool:
+        """Has a bedtime started or ended (or anything else changed) since the last push?"""
+        return parental.fingerprint(parental.effective_by_client(self.conn, now)) != self.parental_fp
 
     # ------------------------------------------------------------------ rules
     def household_client_ids(self, user_id: str) -> list[str]:
@@ -72,10 +120,12 @@ class AdGuardSync:
             if rule != r["adguard_rule"]:
                 self.conn.execute("UPDATE decisions SET adguard_rule = ? WHERE id = ?", (rule, r["id"]))
 
-    def desired_rules(self) -> list[str]:
+    def desired_rules(self, services: dict[str, list[str]] | None = None, effs: dict | None = None) -> list[str]:
+        """Every home's decisions, plus parental controls' rules for this moment."""
         self.refresh_household_rules()
         rows = self.conn.execute("SELECT adguard_rule FROM decisions WHERE undone_at IS NULL").fetchall()
-        return [r["adguard_rule"] for r in rows]
+        effs = parental.effective_by_client(self.conn) if effs is None else effs
+        return [r["adguard_rule"] for r in rows] + parental.parental_rules(effs, services or {})
 
     @property
     def rescue_mode(self) -> bool:
@@ -105,7 +155,8 @@ class AdGuardSync:
         """Push the QuietNet section if it differs. Returns True when AdGuard was changed."""
         async with self._lock:
             try:
-                section = compile_section(self.desired_rules(), await self.rescue_section())
+                services = await self._service_domains()
+                section = compile_section(self.desired_rules(services), await self.rescue_section())
             except AdGuardError as e:
                 self.last_error, self.dirty = str(e), True
                 raise
@@ -130,15 +181,18 @@ class AdGuardSync:
     async def sync_clients(self) -> None:
         async with self._lock:
             devices = self.conn.execute("SELECT client_id, linked_ip FROM devices").fetchall()
+            effs = parental.effective_by_client(self.conn)
             try:
                 existing = {c["name"]: c for c in await self.ag.clients()}
                 for d in devices:
                     ids = [d["client_id"]] + ([d["linked_ip"]] if d["linked_ip"] else [])
+                    eff = effs.get(d["client_id"])
+                    want = parental.client_settings(eff) if eff else None
                     cur = existing.get(d["client_id"])
                     if cur is None:
-                        await self.ag.add_client(d["client_id"], ids)
-                    elif sorted(cur.get("ids") or []) != sorted(ids):
-                        await self.ag.update_client(d["client_id"], ids)
+                        await self.ag.add_client(d["client_id"], ids, want)
+                    elif not self.ag.client_matches(cur, ids, want):
+                        await self.ag.update_client(d["client_id"], ids, want)
             except AdGuardError as e:
                 self.last_error = str(e)
                 self.dirty = True
@@ -175,6 +229,7 @@ class AdGuardSync:
                 log.warning("could not delete AdGuard client %s: %s", client_id, e)
 
     async def sync_all(self) -> None:
+        fp = parental.fingerprint(parental.effective_by_client(self.conn))
         await self.sync_clients()
         if self.rescue_mode:  # catch-all first, then open access
             await self.sync_rules()
@@ -182,3 +237,4 @@ class AdGuardSync:
         else:  # close access first, then drop the catch-all
             await self.sync_access()
             await self.sync_rules()
+        self.parental_fp = fp

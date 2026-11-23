@@ -20,10 +20,12 @@ const isLocal = (ip: string) =>
 const RESULT: Record<string, { label: string; title: string; color: string }> = {
   rule: { label: 'Blocked', title: 'Blocked by one of your QuietNet rules', color: DATA.blocked },
   list: { label: 'Blocked by list', title: 'Blocked by a filter list on the DNS server', color: DATA.blocked },
+  parental: { label: 'Parental controls', title: 'Blocked by parental controls (change them on the Parental page)', color: DATA.blocked },
   cached: { label: 'From cache', title: 'Allowed, answered from the DNS server’s cache', color: DATA.cached },
   allowed: { label: 'Allowed', title: 'Allowed, answered by the upstream resolver', color: DATA.allowed },
 }
-const result = (r: LiveQuery) => RESULT[r.status === 'blocked' ? (r.blocked_by === 'list' ? 'list' : 'rule') : r.status]
+const result = (r: LiveQuery) =>
+  RESULT[r.status === 'blocked' ? (r.blocked_by === 'list' || r.blocked_by === 'parental' ? r.blocked_by : 'rule') : r.status]
 
 interface IpGroup {
   key: string

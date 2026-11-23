@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Radio, Trash2 } from 'lucide-react'
+import { ArrowLeft, Baby, Radio, Trash2 } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import DoneCheck from '../components/DoneCheck'
 import HomeAddress from '../components/HomeAddress'
+import { nowText } from '../components/parental/summary'
 import SetupSteps from '../components/SetupSteps'
 import { CategoryChip, DeviceIcon, Eyebrow, RiskBar, Roll, timeAgo, useToast } from '../components/ui'
 
@@ -59,6 +60,8 @@ export default function DeviceDetail() {
           <RiskBar score={d.risk_score} />
         </div>
       )}
+
+      {d && <ParentalCard deviceId={d.id} />}
 
       <Eyebrow className="mt-10">Who this device talks to</Eyebrow>
       <p className="mt-1 text-sm text-muted">Grouped by company. Blocks here apply to this device only.</p>
@@ -116,6 +119,36 @@ export default function DeviceDetail() {
       <button className="btn-ghost mt-10 text-danger hover:border-danger/60" onClick={() => confirm('Remove this device from QuietNet?') && del.mutate()}>
         <Roll><Trash2 className="h-4 w-4" /> Remove device</Roll>
       </button>
+    </div>
+  )
+}
+
+/** Which parental rules this device follows and what they block right now; changed on the Parental page. */
+function ParentalCard({ deviceId }: { deviceId: string }) {
+  const overview = useQuery({ queryKey: ['parental'], queryFn: api.parental, refetchInterval: 30000 })
+  const services = useQuery({ queryKey: ['parental-services'], queryFn: api.parentalServices, staleTime: 3600_000 })
+  const o = overview.data
+  const p = o?.devices.find((x) => x.id === deviceId)
+  if (!o || !p) return null
+  const byId = new Map((services.data ?? []).map((s) => [s.id, s]))
+  const kid = o.kids.find((k) => k.id === p.profile_id)
+  const follows = [!p.skip_household && 'the household’s rules', kid && `${kid.name}’s profile`, p.own && 'its own rules'].filter(Boolean)
+  const active = p.now.adult || p.now.safe_search || p.now.apps.length > 0 || p.now.internet_off
+  return (
+    <div className="card mt-4 flex flex-wrap items-center gap-4 p-4">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-panel-2 text-sentry">
+        <Baby className="h-4 w-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium">Parental controls</div>
+        <div className={`mt-0.5 text-xs ${active ? 'text-guard' : 'text-muted'}`}>{nowText(p.now, byId)}</div>
+        <div className="mt-0.5 text-xs text-muted">
+          {follows.length ? `Follows ${follows.join(', ')}.` : 'A parent’s device: no parental rules.'}
+        </div>
+      </div>
+      <Link to={`/parental#device-${deviceId}`} className="btn-ghost text-sm">
+        <Roll>Change</Roll>
+      </Link>
     </div>
   )
 }
