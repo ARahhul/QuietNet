@@ -177,6 +177,8 @@ class AdGuardSync:
                 if get_meta(self.conn, "blocklist_digest") != (self.blocklist_digest or ""):
                     await self.ag.refresh_filters()
                     set_meta(self.conn, "blocklist_digest", self.blocklist_digest or "")
+                    # the status read above is from before the reload: its rule count is the old file's
+                    mine = next((f for f in await self.ag.filters() if f.get("url") == url), mine)
             except AdGuardError as e:
                 self.blocklist_error = str(e)
                 self._blocklist_retry_at = time.monotonic() + self.BLOCKLIST_RETRY_S

@@ -2,6 +2,7 @@
 without AI, and each home can still let a name through for itself."""
 
 import asyncio
+import logging
 
 import httpx
 import pytest
@@ -89,12 +90,15 @@ def test_curated_csv_replaces_the_downloaded_lists(lists, tmp_path):
     assert idx.entry("mixpanel.com") is None  # the downloaded lists aren't used any more
 
 
-async def test_adguard_loads_the_list_once_and_reloads_it_when_it_changes(sync, fake, ag, index, lists, tmp_path, conn):
+async def test_adguard_loads_the_list_once_and_reloads_it_when_it_changes(
+    sync, fake, ag, index, lists, tmp_path, conn, caplog
+):
     sync.blocklist_file, sync.blocklist_digest = write_adguard_file(index, tmp_path)
     assert await sync.sync_blocklist()
     assert await sync.sync_blocklist()  # idempotent: still one filter
     assert [f["name"] for f in fake.filters] == [FILTER_NAME]
     fid = fake.filters[0]["id"]
+    before = fake.filters[0]["rules_count"]
     assert sync.blocklist_active and sync.blocklist_status()["filter_id"] == str(fid)
     # Every client, known or not, is turned away from a listed name
     assert fake.match("api.mixpanel.com", "anyone")[0]
@@ -104,9 +108,13 @@ async def test_adguard_loads_the_list_once_and_reloads_it_when_it_changes(sync, 
     csv = tmp_path / "domains.csv"
     csv.write_text("domain,category,owner,sources,source_count,notes\nads.example-new.com,ads,,x,1,\n", encoding="utf-8")
     sync.blocklist_file, sync.blocklist_digest = write_adguard_file(BlocklistIndex.build(lists, csv), tmp_path)
-    await sync.sync_blocklist()
+    with caplog.at_level(logging.INFO, logger="pahra.sync"):
+        await sync.sync_blocklist()
     assert len(fake.filters) == 1 and fake.match("ads.example-new.com", "anyone")[0]
     assert not fake.match("api.mixpanel.com", "anyone")[0]
+    after = fake.filters[0]["rules_count"]
+    assert after != before
+    assert f"AdGuard has the block list ({after} rules)" in caplog.text  # the reloaded file's count, not the old one
 
 
 async def test_a_refused_list_is_retried_later(sync, tmp_path, conn, settings):
