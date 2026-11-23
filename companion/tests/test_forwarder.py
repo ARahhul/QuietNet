@@ -20,7 +20,7 @@ HOST = "dns.example.com"
 
 
 class Upstream:
-    """httpx mock of the Pahra DoH endpoint. Records requests; can fail or answer big."""
+    """httpx mock of the QuietNet DoH endpoint. Records requests; can fail or answer big."""
 
     def __init__(self, mode: str = "ok", answers: int = 1):
         self.mode = mode

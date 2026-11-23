@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+import ipaddress
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 import httpx
@@ -8,7 +10,9 @@ from ..db import rows_to_dicts
 from ..engine import Engine
 from ..queries import weekly_report
 from ..setup_guides import is_cgnat
+from ..ratelimit import POLL_NOW
 from .deps import engine
+from .limits import limit
 
 router = APIRouter(tags=["alerts, report, settings, system"])
 
@@ -75,21 +79,38 @@ async def health(e: Engine = Depends(engine)):
         "poller": {"last_poll": e.poller.last_poll, "error": e.poller.last_error, "interval_s": e.poller.interval_s},
         "sync": {"dirty": e.sync.dirty, "last_ok": e.sync.last_ok, "error": e.sync.last_error},
         "lists": e.lists.stats(),
-        "llm": {"enabled": e.explainer.enabled, "model": e.settings.gemini_model, "error": e.explainer.last_error},
+        "llm": {"enabled": e.explainer.enabled, "model": e.explainer.model, "error": e.explainer.last_error},
+        "tracing": e.tracing.status(),
         "domains_explained": e.conn.execute("SELECT COUNT(*) FROM domains").fetchone()[0],
         "companion": comp.status() if comp else {"enabled": False},
         "forwarder": e.forwarder,
     }
 
 
-@router.post("/poll-now")
+@router.post("/poll-now", dependencies=[Depends(limit("poll_now", POLL_NOW))])
 async def poll_now(e: Engine = Depends(engine)):
     e.poller.poke()
     return {"ok": True}
 
 
+async def home_ip(request: Request) -> str | None:
+    """The public IP of the home the dashboard is opened from.
+
+    Cloud: the visitor's own address (Caddy passes it in X-Forwarded-For, uvicorn applies it).
+    Hybrid (backend on the home laptop): the request comes from localhost, so ask what the
+    laptop's public IP is instead.
+    """
+    host = request.client.host if request.client else None
+    try:
+        if host and ipaddress.ip_address(host).is_global:
+            return host
+    except ValueError:
+        pass
+    return await public_ip()
+
+
 async def public_ip() -> str | None:
-    """The laptop is at home in the hybrid setup, so its public IP is the home's public IP."""
+    """This machine's public IP (the home's, when the backend runs on the home laptop)."""
     try:
         async with httpx.AsyncClient(timeout=5) as c:
             r = await c.get("https://1.1.1.1/cdn-cgi/trace")
@@ -106,22 +127,23 @@ class CgnatIn(BaseModel):
 
 
 @router.get("/network/public-ip")
-async def get_public_ip():
-    return {"public_ip": await public_ip()}
+async def get_public_ip(request: Request):
+    return {"public_ip": await home_ip(request)}
 
 
 @router.post("/network/cgnat")
-async def cgnat(body: CgnatIn):
-    pub = await public_ip()
+async def cgnat(body: CgnatIn, request: Request):
+    pub = await home_ip(request)
     verdict = is_cgnat(body.router_wan_ip, pub)
     return {
         "public_ip": pub,
         "router_wan_ip": body.router_wan_ip,
         "cgnat": verdict,
         "advice": (
-            "Behind CGNAT: don't link IPv4. Use IPv6 linking, encrypted DNS per device, or a hotspot for the demo."
+            "Your internet address is shared with other homes (CGNAT), so plain DNS on the router can't tell "
+            "your home apart. Use encrypted DNS: on your own router, or on each device."
             if verdict
-            else "Dedicated public IP: IPv4 linking on port 53 is OK."
+            else "Your home has its own public IP, so plain DNS on the router works."
             if verdict is False
             else "Couldn't tell. Check the WAN IP on your router's status page."
         ),

@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .api import router
 from .config import Settings, get_settings
 from .engine import Engine
+from .ratelimit import Limiter
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("pahra")
@@ -38,8 +39,11 @@ def create_app(
                 await stop(eng)
             await eng.stop()
 
-    app = FastAPI(title="Pahra", version="0.1.0", lifespan=lifespan)
+    # /docs, /redoc and /openapi.json map every endpoint: handy locally, not something to publish.
+    docs = {} if settings.api_docs else {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    app = FastAPI(title="QuietNet", version="0.1.0", lifespan=lifespan, **docs)
     app.state.extra_lifespan = []
+    app.state.limiter = Limiter() if settings.rate_limit_enabled else None  # per-account limits (pahra.ratelimit)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],

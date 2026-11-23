@@ -48,7 +48,7 @@ malware:
   title: A device tried to reach a known malicious site
   checked: true
   steps:
-    - Pahra blocked it. Check which app was open at the time.
+    - QuietNet blocked it. Check which app was open at the time.
     - Uninstall apps you don't recognise or didn't install from the official store.
     - Run a security scan, and update the device's software.
 odd_behaviour:

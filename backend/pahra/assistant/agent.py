@@ -3,7 +3,9 @@
 * Tool declarations come from the MCP server's list_tools (+ a few backend-only tools).
 * Every mutating tool waits for the user's OK in the UI (session.call_tool / set_private_dns).
 * IP and MAC addresses are replaced with handles before anything reaches Gemini.
-* The agent never sees or chooses the Pahra hostname: the backend creates the device and injects it.
+* The agent never sees or chooses the QuietNet hostname: the backend creates the device and injects it.
+* The prompt is pahra.prompts.TV_ASSISTANT (via Langfuse when configured). A session is one Langfuse
+  trace: every Gemini step and tool call, exactly as redacted for Gemini.
 """
 
 import copy
@@ -12,34 +14,13 @@ import logging
 from typing import Any
 
 from ..forwarder import FORWARDER_TOOLS
+from ..prompts import TV_ASSISTANT
+from ..tracing import Tracing, gemini_usage
 from .session import AssistantSession
 
 log = logging.getLogger("pahra.agent")
 
 MAX_STEPS = 20
-
-SYSTEM = """You are Pahra's setup assistant. You help a non-technical person in India connect their TV or
-streaming box to Pahra (a DNS filter that blocks ads and trackers), using tools that run on their laptop
-on the same WiFi. Be brief and friendly: one or two short sentences per message, no jargon.
-
-Rules:
-- Devices are identified by handles like host-3. Use them exactly as given; never invent addresses.
-- To let the user pick between several candidate devices, call show_device_choices.
-- When you need something from the user (e.g. "say done when ADB is on", a pairing code), call ask_user.
-- Mutating tools (adb_connect, adb_pair, set_private_dns, clear_private_dns) show the user an Allow button
-  automatically. Don't ask for permission in text as well.
-- set_private_dns: pass only ip (and optional device_name/brand). Pahra fills in the hostname itself.
-- After set_private_dns succeeds, call verify_connected. If it returns connected=true, call finish(outcome="connected").
-- For locked platforms (webos, tizen, roku, apple_tv), ADB refused, or verification failure: call
-  get_setup_options, then finish(outcome="guide") with the best option. Pass steps only if you changed them;
-  Pahra otherwise uses its hand-checked guide.
-- Locked TV (webos/tizen, or ADB refused/failed) and get_setup_options ranks the laptop relay first
-  (starts_forwarder=true): call setup_forwarder(ip). It asks the user, then returns forwarder_ip. Tell the user to
-  set the TV's DNS server to forwarder_ip using that option's steps, ask_user to reply done, then verify_connected.
-  If the user declines or it fails, fall back to the next option.
-- Never ask for or guess router/TV passwords. Never log into the router.
-- Always end with finish.
-"""
 
 BACKEND_TOOLS = [
     {
@@ -80,13 +61,13 @@ BACKEND_TOOLS = [
     },
     {
         "name": "setup_forwarder",
-        "description": "Run Pahra's DNS relay on this laptop for a locked TV (asks the user first). Creates the TV in "
-                       "Pahra and returns forwarder_ip: the DNS server address the user must type into the TV.",
+        "description": "Run QuietNet's DNS relay on this laptop for a locked TV (asks the user first). Creates the TV in "
+                       "QuietNet and returns forwarder_ip: the DNS server address the user must type into the TV.",
         "parameters": {
             "type": "object",
             "properties": {
                 "ip": {"type": "string", "description": "the TV's handle, e.g. host-3"},
-                "device_name": {"type": "string", "description": "friendly name for the TV in Pahra"},
+                "device_name": {"type": "string", "description": "friendly name for the TV in QuietNet"},
                 "brand": {"type": "string"},
             },
             "required": ["ip"],
@@ -94,7 +75,7 @@ BACKEND_TOOLS = [
     },
     {
         "name": "verify_connected",
-        "description": "After set_private_dns: wait up to 60 s for the TV's first DNS query through Pahra.",
+        "description": "After set_private_dns: wait up to 60 s for the TV's first DNS query through QuietNet.",
         "parameters": {"type": "object", "properties": {}},
     },
     {
@@ -142,7 +123,7 @@ def build_declarations(session: AssistantSession) -> list[dict]:
         if name == "set_private_dns":
             props = schema.setdefault("properties", {})
             props.pop("hostname", None)
-            props["device_name"] = {"type": "string", "description": "friendly name for the TV in Pahra"}
+            props["device_name"] = {"type": "string", "description": "friendly name for the TV in QuietNet"}
             props["brand"] = {"type": "string"}
             schema["required"] = [r for r in schema.get("required", []) if r != "hostname"]
         decls.append({"name": name, "description": (tool.description or "")[:1000], "parameters": schema})
@@ -152,10 +133,11 @@ def build_declarations(session: AssistantSession) -> list[dict]:
 
 
 class AgentRunner:
-    def __init__(self, session: AssistantSession, genai_client: Any, model: str):
+    def __init__(self, session: AssistantSession, genai_client: Any, model: str, tracing: Tracing | None = None):
         self.s = session
         self.client = genai_client
         self.model = model
+        self.tracing = tracing or Tracing()
         self.payloads: list[str] = []  # what we sent to Gemini (tests assert no IP/MAC leaks)
 
     async def _dispatch(self, name: str, args: dict) -> dict:
@@ -205,30 +187,49 @@ class AgentRunner:
         return {"ok": False, "error": f"unknown tool {name}"}
 
     async def run(self) -> None:
+        s = self.s
+        with self.tracing.trace("tv-assistant", as_type="agent", input=s.description, session_id=s.id, tags=("assistant",)) as t:
+            outcome = await self._run()
+            t.update(output={"outcome": outcome})
+
+    async def _run(self) -> str:
         from google.genai import types
 
-        s = self.s
+        s, tr = self.s, self.tracing
         await s.emit({"type": "mode", "mode": "agent"})
         decls = [types.FunctionDeclaration(name=d["name"], description=d["description"], parameters_json_schema=d["parameters"])
                  for d in build_declarations(s)]
-        system = SYSTEM + ("\n\nPlaybook from the companion:\n" + s.companion.playbook if s.companion.playbook else "")
+        playbook = "\nPlaybook from the companion:\n" + s.companion.playbook if s.companion.playbook else ""
+        p = await tr.prompt(TV_ASSISTANT, playbook=playbook, description=s.description)
         config = types.GenerateContentConfig(
-            system_instruction=system,
+            system_instruction=p.system,
             tools=[types.Tool(function_declarations=decls)],
-            temperature=0.2,
+            temperature=p.temperature,
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         )
-        contents: list = [types.Content(role="user", parts=[types.Part(text=f'Connect this device: "{s.description}"')])]
+        contents: list = [types.Content(role="user", parts=[types.Part(text=p.user)])]
 
-        for _ in range(MAX_STEPS):
-            self.payloads.append(json.dumps([c.model_dump(mode="json", exclude_none=True) for c in contents[-2:]], default=str))
-            resp = await self.client.aio.models.generate_content(model=self.model, contents=contents, config=config)
-            cand = resp.candidates[0].content if resp.candidates else None
+        for step in range(MAX_STEPS):
+            sent = [c.model_dump(mode="json", exclude_none=True) for c in contents]
+            self.payloads.append(json.dumps(sent[-2:], default=str))
+            with tr.generation(
+                "tv-assistant-step",
+                model=self.model,
+                prompt=p,
+                input=[{"role": "system", "content": p.system}, *sent],
+                metadata={"step": step, "tools": len(decls)},
+            ) as gen:
+                resp = await self.client.aio.models.generate_content(model=self.model, contents=contents, config=config)
+                cand = resp.candidates[0].content if resp.candidates else None
+                gen.update(
+                    output=cand.model_dump(mode="json", exclude_none=True) if cand is not None else None,
+                    usage_details=gemini_usage(resp),
+                )
             if cand is None:
                 raise RuntimeError("empty response from Gemini")
             contents.append(cand)
-            calls = [p.function_call for p in (cand.parts or []) if p.function_call]
-            texts = [p.text for p in (cand.parts or []) if p.text and not p.thought]
+            calls = [p_.function_call for p_ in (cand.parts or []) if p_.function_call]
+            texts = [p_.text for p_ in (cand.parts or []) if p_.text and not p_.thought]
             text = s.redactor.unredact(" ".join(texts)).strip()
             if not calls:
                 reply = await s.ask(text or "Anything else?")
@@ -238,10 +239,13 @@ class AgentRunner:
                 await s.say(text)
             parts = []
             for fc in calls:
-                args = s.redactor.unredact(dict(fc.args or {}))
-                result = await self._dispatch(fc.name, args)
-                parts.append(types.Part.from_function_response(name=fc.name, response={"result": s.redactor.redact(result)}))
+                with tr.tool(fc.name, input=dict(fc.args or {})) as tool:  # still redacted: handles, not addresses
+                    args = s.redactor.unredact(dict(fc.args or {}))
+                    result = s.redactor.redact(await self._dispatch(fc.name, args))
+                    tool.update(output=result)
+                parts.append(types.Part.from_function_response(name=fc.name, response={"result": result}))
                 if s.done:
-                    return
+                    return fc.name
             contents.append(types.Content(role="user", parts=parts))
         await s.finish("failed", "That took too many steps. Try the manual setup below or start again.", s.guide_from_options())
+        return "too many steps"

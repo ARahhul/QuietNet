@@ -1,10 +1,10 @@
-"""Rank the ways to point a device's DNS at Pahra, using the hand-written guides/*.yaml.
+"""Rank the ways to point a device's DNS at QuietNet, using the hand-written guides/*.yaml.
 
 Ranking rules (the "playbook"):
   * Android family (android_tv, google_tv, fire_tv): ADB Private DNS first. It is automatic,
     gives the TV its own identity, and works behind CGNAT.
   * Then, and for locked platforms (webos, tizen, roku, apple_tv):
-      - not behind CGNAT: router DNS, then manual DNS on the TV pointed at the Pahra VM, then
+      - not behind CGNAT: router DNS, then manual DNS on the TV pointed at the QuietNet VM, then
         manual DNS pointed at the laptop DNS relay (available, not recommended).
       - behind CGNAT or unknown: manual DNS on the TV pointed at the laptop DNS relay (recommended),
         then a phone hotspot (demo only), then router DNS marked not recommended.
@@ -27,10 +27,10 @@ from .fingerprint import ANDROID_FAMILY, PLATFORMS
 GUIDE_FILES = ("android_tv", "google_tv", "fire_tv", "webos", "tizen", "roku", "apple_tv", "router", "common")
 
 PLACEHOLDERS = {
-    "hostname": "Pahra DoT hostname for this device, e.g. <device-id>.dns.<domain> (from the Pahra backend)",
-    "dns_server_ip": "IPv4 address of the Pahra DNS server (the VM)",
+    "hostname": "QuietNet DoT hostname for this device, e.g. <device-id>.dns.<domain> (from the QuietNet backend)",
+    "dns_server_ip": "IPv4 address of the QuietNet DNS server (the VM)",
     "gateway_ip": "the router's LAN IP (get_network_context.gateway.ip)",
-    "forwarder_ip": "this laptop's LAN IP where the Pahra DNS relay listens (start_dns_forwarder's listen_ip)",
+    "forwarder_ip": "this laptop's LAN IP where the QuietNet DNS relay listens (start_dns_forwarder's listen_ip)",
 }
 
 _CGNAT_ALIASES = {
@@ -177,22 +177,22 @@ def _manual_paths(manual: dict[str, Any] | None, brand: str | None, state: str, 
 
     if state == "not_cgnat":
         out.append(_render(router_opt, router_brand, recommended=True, dns_target="pahra_vm",
-                           why="Not behind CGNAT: the router can send DNS to Pahra and Pahra can link your home's public IP."))
+                           why="Not behind CGNAT: the router can send DNS to QuietNet and QuietNet can link your home's public IP."))
         if manual:
             out.append(_render(manual, brand, id_suffix="pahra_vm", recommended=True, dns_target="pahra_vm",
-                               why="Only this TV uses Pahra. Pahra links your home's public IP to it."))
+                               why="Only this TV uses QuietNet. QuietNet links your home's public IP to it."))
             out.append(relay(False, "Also works and gives the TV its own identity, but it needs this laptop on all the "
                                     "time. Not needed while your home has its own public IP."))
         return out
-    reason = ("Behind CGNAT: your public IPv4 is shared with other customers, so Pahra cannot tell your home apart."
+    reason = ("Behind CGNAT: your public IPv4 is shared with other customers, so QuietNet cannot tell your home apart."
               if state == "cgnat" else
               "CGNAT status unknown: router DNS works only if your home has its own public IPv4.")
     if manual:
-        out.append(relay(True, reason + " The TV sends DNS to this laptop, and the relay forwards it to Pahra under "
-                                        "the TV's own identity. It needs this laptop on, with Pahra running."))
+        out.append(relay(True, reason + " The TV sends DNS to this laptop, and the relay forwards it to QuietNet under "
+                                        "the TV's own identity. It needs this laptop on, with QuietNet running."))
         out.append(_render(manual, brand, id_suffix="hotspot", recommended=False, dns_target="pahra_vm_via_hotspot",
                            prefix_steps=(hotspot["variants"][0]["steps"][:1]),
-                           why="Demo only: on a phone hotspot Pahra can link the hotspot's public IP to this TV for a while.",
+                           why="Demo only: on a phone hotspot QuietNet can link the hotspot's public IP to this TV for a while.",
                            extra_notes=list(hotspot.get("notes") or [])))
     else:
         out.append(_render(forwarder, None, id_suffix="router", recommended=False, dns_target="laptop_forwarder",
@@ -228,7 +228,7 @@ def setup_options(
         ok = state == "not_cgnat"
         options.append(_render(router_opt, router_n, recommended=ok, dns_target="pahra_vm",
                                why="Not behind CGNAT." if ok else
-                               ("Behind CGNAT: router DNS gives Pahra no way to identify your home." if state == "cgnat"
+                               ("Behind CGNAT: router DNS gives QuietNet no way to identify your home." if state == "cgnat"
                                 else "CGNAT status unknown: works only if your home has its own public IPv4.")))
         impossible = list(guide.get("limitations") or [])
     elif platform == "unknown":
@@ -241,11 +241,11 @@ def setup_options(
         if platform in ANDROID_FAMILY:
             adb_opt = _option(guide, "adb_private_dns")
             options.append(_render(adb_opt, brand_n, recommended=True, dns_target="hostname",
-                                   why="Automatic: Pahra sets Private DNS over ADB. The TV gets its own identity, and this works behind CGNAT."))
+                                   why="Automatic: QuietNet sets Private DNS over ADB. The TV gets its own identity, and this works behind CGNAT."))
         options.extend(_manual_paths(_option(guide, "manual_dns_tv"), brand_n, state, router_n))
         if state != "not_cgnat":
             impossible.append(
-                "Router DNS pointed at the Pahra VM cannot identify your home while you are behind CGNAT "
+                "Router DNS pointed at the QuietNet VM cannot identify your home while you are behind CGNAT "
                 "(or until CGNAT is ruled out)."
             )
 

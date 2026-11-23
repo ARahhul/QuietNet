@@ -13,7 +13,7 @@ from ..knowledge import is_acr, is_must_allow, is_must_allow_any_device
 from ..poller import Observed
 from .clues import ClueFetcher
 from .confidence import apply_confidence
-from .explainer import Explainer
+from .explainer import AI_LABELS, Explainer
 from .fastchecks import fast_check
 from .lists import ListIndex
 from .normalize import root_domain
@@ -72,8 +72,9 @@ class Pipeline:
             for ob in by_domain[d]:
                 if is_must_allow(d, self._device_type(ob.device_id), tuple(ob.qnames)):
                     continue
-                if active_decision(self.conn, d, ob.device_id) is None:
-                    dev = self.conn.execute("SELECT user_id FROM devices WHERE id = ?", (ob.device_id,)).fetchone()
+                dev = self.conn.execute("SELECT user_id FROM devices WHERE id = ?", (ob.device_id,)).fetchone()
+                # nothing decided yet for this device or its household (a household unblock must hold, too)
+                if active_decision(self.conn, d, ob.device_id) is None and active_decision(self.conn, d, None, dev["user_id"]) is None:
                     create_decision(self.conn, dev["user_id"], d, "quarantine", ob.device_id, decided_by="auto")
                     quarantined = True
         if quarantined:
@@ -137,7 +138,7 @@ class Pipeline:
         n = 0
         for c in clue_list:
             v = verdicts[c.domain]
-            if v.get("explained_by") != "gemini":
+            if v.get("explained_by") not in AI_LABELS:
                 continue
             v = apply_confidence(v, c.fast, c.beacon, is_must_allow_any_device(c.domain))
             sig = json.loads(

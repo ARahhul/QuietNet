@@ -2,8 +2,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Radio, Trash2 } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
+import DoneCheck from '../components/DoneCheck'
+import HomeAddress from '../components/HomeAddress'
 import SetupSteps from '../components/SetupSteps'
-import { CategoryChip, DeviceIcon, RiskBar, timeAgo, useToast } from '../components/ui'
+import { CategoryChip, DeviceIcon, Eyebrow, RiskBar, Roll, timeAgo, useToast } from '../components/ui'
+
+/** Plain DNS: recognised by the home's public IP, so it needs that address kept current. */
+const PLAIN = ['ipv4_demo', 'ipv6']
 
 export default function DeviceDetail() {
   const { id = '' } = useParams()
@@ -35,17 +40,17 @@ export default function DeviceDetail() {
 
   const d = device.data
   return (
-    <div className="mx-auto max-w-3xl">
-      <Link to="/devices" className="inline-flex items-center gap-1 text-sm text-muted hover:text-slate-100">
-        <ArrowLeft className="h-4 w-4" /> Devices
+    <div>
+      <Link to="/devices" className="group inline-flex items-center gap-1 text-sm text-muted transition hover:text-white">
+        <ArrowLeft className="h-4 w-4 transition-transform motion-safe:group-hover:-translate-x-1" /> <span className="underline-slide">Devices</span>
       </Link>
       {d && (
-        <div className="card mt-3 flex items-center gap-4 p-5">
-          <div className="grid h-12 w-12 place-items-center rounded-xl bg-panel-2">
+        <div className="card mt-4 flex items-center gap-4 p-5">
+          <div className="grid h-12 w-12 place-items-center rounded-md bg-panel-2 text-brand-soft">
             <DeviceIcon type={d.type} className="h-6 w-6" />
           </div>
           <div className="flex-1">
-            <div className="text-xl font-bold">{d.name}</div>
+            <div className="font-display text-2xl leading-tight">{d.name}</div>
             <div className="font-mono text-xs text-muted">{d.client_id}</div>
             <div className="mt-1 text-xs text-muted">
               {d.online ? 'online' : `last seen ${timeAgo(d.last_seen)}`} · {d.stats.queries} queries · {d.stats.blocked_queries} blocked
@@ -55,14 +60,14 @@ export default function DeviceDetail() {
         </div>
       )}
 
-      <h2 className="mt-8 text-lg font-semibold">Who this device talks to</h2>
-      <p className="text-sm text-muted">Grouped by company. Blocks here apply to this device only.</p>
-      <div className="mt-3 grid gap-3">
-        {activity.data?.length === 0 && <div className="text-sm text-muted">No traffic yet.</div>}
+      <Eyebrow className="mt-10">Who this device talks to</Eyebrow>
+      <p className="mt-1 text-sm text-muted">Grouped by company. Blocks here apply to this device only.</p>
+      <div className="mt-4 grid items-start gap-3 xl:grid-cols-2">
+        {activity.data?.length === 0 && <div className="col-span-full text-sm text-muted">No traffic yet.</div>}
         {activity.data?.map((g) => (
-          <div key={g.owner} className="card p-4">
+          <div key={g.owner} className="card card-hover p-4">
             <div className="flex items-baseline justify-between">
-              <div className="font-semibold">{g.owner}</div>
+              <div className="font-display text-lg">{g.owner}</div>
               <div className="text-xs text-muted">{g.count} queries</div>
             </div>
             <ul className="mt-2 divide-y divide-line">
@@ -79,11 +84,11 @@ export default function DeviceDetail() {
                       title={x.decision.household ? 'Household rule. Undo it from Suggestions or Settings.' : ''}
                       onClick={() => undo.mutate(x.decision!.id)}
                     >
-                      {x.decision.action === 'allow' ? 'allowed' : x.decision.action === 'quarantine' ? 'held' : 'blocked'} · undo
+                      <Roll>{x.decision.action === 'allow' ? 'allowed' : x.decision.action === 'quarantine' ? 'held' : 'blocked'} · undo</Roll>
                     </button>
                   ) : x.category !== 'needed' ? (
                     <button className="btn-ghost px-2.5 py-1 text-xs" onClick={() => decide.mutate({ domain: x.domain, action: 'block' })}>
-                      block
+                      <Roll>block</Roll>
                     </button>
                   ) : null}
                 </li>
@@ -95,15 +100,21 @@ export default function DeviceDetail() {
 
       {setup.data && d && (
         <>
-          <h2 className="mt-8 text-lg font-semibold">Connection settings</h2>
-          <div className="card mt-3 p-5">
+          <Eyebrow className="mt-10">Connection settings</Eyebrow>
+          <div className="card mt-4 max-w-3xl p-5">
             <SetupSteps deviceId={d.id} guide={setup.data} brand={d.brand} />
           </div>
+          {PLAIN.includes(d.setup_method) && (
+            <div className="mt-4 grid max-w-3xl gap-4">
+              <HomeAddress device={d} />
+              <DoneCheck deviceId={d.id} />
+            </div>
+          )}
         </>
       )}
 
-      <button className="btn-ghost mt-8 text-danger" onClick={() => confirm('Remove this device from Pahra?') && del.mutate()}>
-        <Trash2 className="h-4 w-4" /> Remove device
+      <button className="btn-ghost mt-10 text-danger hover:border-danger/60" onClick={() => confirm('Remove this device from QuietNet?') && del.mutate()}>
+        <Roll><Trash2 className="h-4 w-4" /> Remove device</Roll>
       </button>
     </div>
   )

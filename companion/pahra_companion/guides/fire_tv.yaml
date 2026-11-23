@@ -9,16 +9,16 @@ summary: >-
 limitations:
   - Fire TV Settings has no Private DNS option, so it can only be set over ADB.
   - Fire OS 5 and 6 are older than Android 9 (SDK < 28) and have no Private DNS at all.
-  - Some Fire OS builds may accept the setting but not use it. Pahra checks its DNS log after setting it and falls back if no queries arrive.
+  - Some Fire OS builds may accept the setting but not use it. QuietNet checks its DNS log after setting it and falls back if no queries arrive.
 options:
   - id: fire_tv_adb_private_dns
     kind: adb_private_dns
-    title: Let Pahra set Private DNS over ADB (automatic)
+    title: Let QuietNet set Private DNS over ADB (automatic)
     automatable: true
     gives_per_device_identity: true
     needs: [hostname]
     notes:
-      - The first time Pahra connects, the Fire TV asks "Allow USB debugging?". Tick "Always allow from this computer" and choose OK.
+      - The first time QuietNet connects, the Fire TV asks "Allow USB debugging?". Tick "Always allow from this computer" and choose OK.
       - You can switch ADB debugging off again afterwards. The Private DNS setting stays.
     variants:
       - label: Fire OS 7/8 (Developer Options hidden)
@@ -30,14 +30,14 @@ options:
           - Go back to My Fire TV. Developer Options is now in the list. Open it.
           - Turn on ADB debugging.
           - "Find the IP address: Settings, My Fire TV, About, Network."
-          - Tell Pahra you are done. When the Fire TV asks "Allow USB debugging?", choose Always allow, then OK.
+          - Tell QuietNet you are done. When the Fire TV asks "Allow USB debugging?", choose Always allow, then OK.
       - label: Older Fire OS (Developer Options already visible)
         brands: []
         verified: false
         steps:
           - Open Settings, then My Fire TV (called Device or System on older versions).
           - Open Developer Options and turn on ADB debugging.
-          - Tell Pahra you are done. When the Fire TV asks "Allow USB debugging?", choose Always allow, then OK.
+          - Tell QuietNet you are done. When the Fire TV asks "Allow USB debugging?", choose Always allow, then OK.
   - id: fire_tv_manual_dns
     kind: manual_dns_tv
     title: Type a DNS server into the Fire TV's Wi-Fi settings

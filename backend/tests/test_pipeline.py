@@ -87,7 +87,8 @@ async def test_end_to_end_lg_tv(conn, ag, fake, user_id, add_device, pipeline):
     q = active_decision(conn, "xjq3k9zt7w2p.top", tv)
     assert q and q["action"] == "quarantine"
     assert fake.match("xjq3k9zt7w2p.top", "rahhul-lg-tv")[0]
-    assert not fake.match("xjq3k9zt7w2p.top", "someone-else")[0]
+    blocked, rules = fake.match("xjq3k9zt7w2p.top", "someone-else")  # only ever the rescue catch-all
+    assert not blocked or all(r.startswith("||*^$client=~") for r in rules)
 
     # auto-mode is OFF by default: known trackers are cards, not blocks (keeps the "Block all" moment)
     assert active_decision(conn, "alphonso.tv", tv) is None
@@ -107,6 +108,28 @@ async def test_auto_mode_blocks_high_confidence(conn, ag, fake, user_id, add_dev
     assert d and d["action"] == "block" and d["decided_by"] == "auto"
     assert fake.match("ads.doubleclick.net", "rahhul-phone")[0]
     assert active_decision(conn, "www.google.com", phone) is None
+
+
+async def test_auto_mode_leaves_what_might_break_to_the_person(conn, ag, fake, user_id, add_device, pipeline):
+    """Seen live: auto-mode blocked Facebook's dgw.c10r.facebook.com (medium break risk) and was about to block
+    akadns.net, which Microsoft sign-in and many big sites resolve through."""
+    conn.execute("UPDATE users SET auto_mode = 1")
+    router = add_device("home-router", "router")
+    fake.record("home-router", "googleads.g.doubleclick.net")
+    await pipeline.process(await Poller(conn, ag, 30).poll_once())
+    assert active_decision(conn, "doubleclick.net", router)["decided_by"] == "auto"
+
+    # Medium break risk: stays a suggestion
+    conn.execute("UPDATE domains SET break_risk = 'medium' WHERE domain = 'doubleclick.net'")
+    conn.execute("UPDATE decisions SET undone_at = '2026-01-01T00:00:00Z'")
+    fake.record("home-router", "googleads.g.doubleclick.net")
+    await pipeline.process(await Poller(conn, ag, 30).poll_once())
+    assert active_decision(conn, "doubleclick.net", router) is None
+
+    # Akamai's DNS is never auto-blocked, whatever a list says about it
+    from pahra.knowledge import is_must_allow
+
+    assert is_must_allow("akadns.net", "router") and is_must_allow("login.msa.akadns6.net", "phone")
 
 
 async def test_threat_feed_domain_is_blocked_with_alert(conn, ag, fake, user_id, add_device, pipeline, lists):

@@ -1,0 +1,163 @@
+# Home internet providers (India) and WiFi routers: hand-checked guides for Setup → Home WiFi.
+#
+# Anything not listed here gets an AI-written guide (cached), see pahra/providers.py.
+# Default logins differ between models and firmware batches and no provider publishes them;
+# these are commonly reported ones. The UI always puts the sticker first.
+#
+# Matching (not sent to the browser):
+#   aliases   words a user might type for this provider / brand
+#   asns      networks the provider announces (Team Cymru IP→ASN lookup)
+#   as_match  substrings of the network's registered name, upper case
+
+isps:
+  - key: jio
+    name: Jio (JioFiber / AirFiber)
+    short: Jio
+    aliases: [jio, jiofiber, reliance jio, jio airfiber]
+    asns: [55836]
+    as_match: [RELIANCEJIO, RELIANCE JIO]
+    admin_urls: [http://192.168.29.1]
+    logins:
+      - {user: admin, pass: Jiocentrum, "on": older JioFiber gateways}
+    dns_locked: often
+    dns_note: Many settings on Jio's box are locked, often DNS too.
+    cgnat: usually
+    help_from: the MyJio app (Support)
+    ask_for:
+      - Ask Jio support for the admin login of your gateway, or ask the technician at the next visit.
+      - Jio rarely unlocks DNS on its own box. The reliable route is your own router plugged into the Jio box, or protecting devices one by one.
+    own_ip: Home plans share one IPv4 address between many homes. Ask Jio whether a static IP is available for your connection.
+
+  - key: airtel
+    name: Airtel Xstream Fiber / AirFiber
+    short: Airtel
+    aliases: [airtel, bharti, airtel xstream, xstream]
+    asns: [9498, 24560, 45609]
+    as_match: [BHARTI, AIRTEL]
+    admin_urls: [http://192.168.1.1]
+    logins:
+      - {user: admin, pass: admin, "on": some ZTE boxes}
+      - {user: admin, pass: password, "on": some Nokia boxes}
+    dns_locked: often
+    dns_note: Airtel manages its boxes remotely, so the DNS fields are often greyed out.
+    cgnat: often
+    help_from: the Airtel Thanks app (Help)
+    ask_for:
+      - Ask Airtel support for the router login, or ask them to set the DNS for you.
+      - Ask them to switch the Airtel box to bridge mode so your own router connects to the internet. Then everything is set on your router.
+    own_ip: Airtel sells a static IP add-on (reported at roughly ₹100–300 a month) that gives your home its own IPv4 address.
+
+  - key: act
+    name: ACT Fibernet
+    short: ACT
+    aliases: [act, act fibernet, atria, beam]
+    asns: [24309, 18209]
+    as_match: [ATRIA CONVERGENCE, BEAM TELECOM]
+    admin_urls: [http://192.168.0.1, http://192.168.1.1]
+    logins:
+      - {user: admin, pass: admin}
+    sticker_note: ACT often installs a regular TP-Link or D-Link router. Its own label usually has the login.
+    dns_locked: varies
+    dns_note: Depends on the router ACT installed. Regular TP-Link or D-Link routers usually allow it.
+    cgnat: often
+    help_from: the ACT Fibernet app (Help)
+    ask_for:
+      - Ask ACT support for the router login, or ask them to set the DNS for you.
+    own_ip: Ask ACT whether a static IP add-on is available in your city.
+
+  - key: hathway
+    name: Hathway
+    short: Hathway
+    aliases: [hathway]
+    asns: [17488]
+    as_match: [HATHWAY]
+    admin_urls: [http://192.168.1.1, http://192.168.0.1]
+    logins:
+      - {user: admin, pass: admin}
+      - {user: admin, pass: password}
+    sticker_note: "On some Hathway boxes the password is the MAC address on the label: 12 characters, typed without the colons."
+    dns_locked: varies
+    dns_note: Hathway uses boxes from several makers; some allow it, some lock it.
+    cgnat: often
+    help_from: Hathway's customer care
+    ask_for:
+      - Ask Hathway customer care for the router login, or ask them to set the DNS for you.
+
+  - key: bsnl
+    name: BSNL Bharat Fiber
+    short: BSNL
+    aliases: [bsnl, bharat fiber, bharatfiber, bsnl ftth]
+    asns: [9829]
+    as_match: [BSNL, NATIONAL INTERNET BACKBONE]
+    admin_urls: [http://192.168.1.1]
+    logins:
+      - {user: admin, pass: admin}
+      - {user: admin, pass: stdONU101, "on": some Syrotech and Netlink boxes}
+    dns_locked: varies
+    dns_note: Usually changeable on the box your BSNL partner installed.
+    cgnat: varies
+    help_from: the local BSNL partner who installed your connection
+    ask_for:
+      - Call the local BSNL Bharat Fiber partner who set up your connection. They configured the box and have its login.
+
+  - key: excitel
+    name: Excitel
+    short: Excitel
+    aliases: [excitel]
+    as_match: [EXCITEL]
+    admin_urls: [http://192.168.1.1, http://192.168.0.1]
+    logins:
+      - {user: excitel, pass: exc@123}
+      - {user: admin, pass: admin}
+    dns_locked: varies
+    dns_note: Depends on the box; some keep it locked.
+    cgnat: varies
+    help_from: Excitel's customer care
+    ask_for:
+      - Ask Excitel customer care for the router login, or ask them to set the DNS for you.
+
+  - key: tataplay
+    name: Tata Play Fiber
+    short: Tata Play
+    aliases: [tata play, tataplay, tata sky, tatasky]
+    as_match: [TATA PLAY, TATAPLAY, TATA SKY, TATASKY]
+    admin_urls: [http://192.168.1.1]
+    logins: []
+    dns_locked: varies
+    dns_note: Depends on the box.
+    cgnat: varies
+    help_from: Tata Play Fiber's customer care
+    ask_for:
+      - Ask Tata Play Fiber customer care for the router login, or ask them to set the DNS for you.
+
+# Used for providers the AI doesn't know (or when no AI key is set). {name} is the typed name.
+generic_isp:
+  admin_urls: [http://192.168.1.1, http://192.168.0.1]
+  logins:
+    - {user: admin, pass: admin}
+    - {user: admin, pass: password}
+  dns_locked: varies
+  dns_note: Depends on the box.
+  cgnat: varies
+  help_from: "{name}'s customer care, or the technician who installed it"
+  ask_for:
+    - "Ask {name}, or the technician who installed it, for the router's admin login, or ask them to set the DNS for you."
+
+routers:
+  - {key: asus, name: ASUS, brand: ASUS, aliases: [asus], dot: "yes", admin_url: "http://router.asus.com", dns_menu: "Advanced Settings → WAN → Internet Connection → WAN DNS Setting", login: "The username and password you chose when you set it up. Very old models: admin / admin."}
+  - {key: glinet, name: GL.iNet, brand: GL.iNet, aliases: [gl inet, glinet], dot: advanced, admin_url: "http://192.168.8.1", dns_menu: "Applications → AdGuard Home → Settings → DNS settings", login: "The admin password you chose when you set it up."}
+  - {key: openwrt, name: OpenWrt, brand: OpenWrt, aliases: [openwrt, lede], dot: advanced, admin_url: "http://192.168.1.1", login: "root, with the password you set."}
+  - {key: tplink, name: TP-Link, brand: TP-Link, aliases: [tp link, tplink, deco, archer], dot: "no", admin_url: "http://tplinkwifi.net", login: "The password you created at first setup. Older models: admin / admin."}
+  - {key: netgear, name: Netgear, brand: Netgear, aliases: [netgear, nighthawk, orbi], dot: "no", admin_url: "http://routerlogin.net", login: "What you set at first setup. Older models: admin / password."}
+  - {key: dlink, name: D-Link, brand: D-Link, aliases: [d link, dlink], dot: "no", admin_url: "http://192.168.0.1", login: "The login on its label. Older models: admin with an empty password."}
+  - {key: mi, name: Xiaomi / Mi, brand: Xiaomi, aliases: [xiaomi, mi, redmi], dot: "no", admin_url: "http://192.168.31.1", login: "The admin password you chose when you set it up."}
+  - {key: tenda, name: Tenda, brand: Tenda, aliases: [tenda], dot: "no", admin_url: "http://tendawifi.com", login: "The login on its label, or what you set at first setup."}
+
+generic_router:
+  dot: "no"
+  admin_url: ""
+  login: "The login on its label, or what you set at first setup."
+
+# Router admin pages that live on a public-looking name (the router answers it locally).
+# AI-written admin addresses must be a private IP or one of these.
+admin_hosts: [router.asus.com, tplinkwifi.net, tplinklogin.net, routerlogin.net, routerlogin.com, tendawifi.com, miwifi.com, dlinkrouter.local, mywifiext.net, myrouter.local, console.gl-inet.com, fritz.box, linksyssmartwifi.com, myrouter.com]

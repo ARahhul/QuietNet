@@ -6,8 +6,8 @@ summary: >-
   Roku OS has no DNS setting at all and no ADB. The only way to cover a Roku is to change
   the DNS your router hands out.
 limitations:
-  - Roku OS has no DNS setting, no Private DNS and no ADB. Pahra cannot change anything on the Roku itself.
-  - Router DNS is the only path. Behind CGNAT, router DNS pointed at the Pahra VM gives no per-home identity.
+  - Roku OS has no DNS setting, no Private DNS and no ADB. QuietNet cannot change anything on the Roku itself.
+  - Router DNS is the only path. Behind CGNAT, router DNS pointed at the QuietNet VM gives no per-home identity.
   - Pointing the router at this laptop's DNS relay does not work either. The relay answers only the TVs it knows and refuses everything else, so every other device in the home would lose DNS.
-  - Some Roku apps and services may use their own DNS servers and bypass the router's setting. Catching that needs the router to redirect port 53, which Pahra does not do.
+  - Some Roku apps and services may use their own DNS servers and bypass the router's setting. Catching that needs the router to redirect port 53, which QuietNet does not do.
 options: []

@@ -4,8 +4,12 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type Device, type DeviceType, type SetupGuide } from '../api'
 import AssistantPanel from '../components/assistant/AssistantPanel'
+import DoneCheck from '../components/DoneCheck'
+import HomeAddress from '../components/HomeAddress'
+import RouterWizard, { type RouterPlan } from '../components/RouterWizard'
+import ScreenshotHelp from '../components/ScreenshotHelp'
 import SetupSteps from '../components/SetupSteps'
-import { DeviceIcon } from '../components/ui'
+import { DeviceIcon, Roll } from '../components/ui'
 
 interface Choice {
   key: string
@@ -22,7 +26,7 @@ const CHOICES: Choice[] = [
   { key: 'windows', label: 'Windows laptop', hint: 'Encrypted DNS (DoH)', type: 'laptop', brand: 'Windows', method: 'doh' },
   { key: 'mac', label: 'Mac', hint: 'Install a profile', type: 'laptop', brand: 'Apple', method: 'doh' },
   { key: 'tv', label: 'Smart TV / streaming box', hint: 'LG, Samsung, Android TV, Fire TV', type: 'tv', brand: null },
-  { key: 'router', label: 'Home router (covers everything)', hint: 'Plain DNS + linked home IP', type: 'router', brand: null, method: 'ipv4_demo' },
+  { key: 'router', label: 'Home WiFi (covers everything)', hint: 'Finds your provider: Jio, Airtel, ACT or any other', type: 'router', brand: null, method: 'ipv4_demo' },
 ]
 
 const TV_BRANDS = [
@@ -32,7 +36,11 @@ const TV_BRANDS = [
   { brand: 'Amazon', label: 'Fire TV Stick', method: 'adb' },
 ]
 
-export default function Setup() {
+/**
+ * `first`: shown as the home page until one of the home's devices sends a lookup, so it leads with the steps and
+ * lists the devices already added; `onDone` leaves it once one is connected.
+ */
+export default function Setup({ first, onDone }: { first?: boolean; onDone?: () => void }) {
   const qc = useQueryClient()
   const [choice, setChoice] = useState<Choice | null>(null)
   const [tvBrand, setTvBrand] = useState<(typeof TV_BRANDS)[number] | null>(null)
@@ -40,13 +48,18 @@ export default function Setup() {
   const [created, setCreated] = useState<{ device: Device; setup: SetupGuide } | null>(null)
 
   const create = useMutation({
-    mutationFn: () =>
-      api.createDevice({
-        name: name.trim() || choice!.label,
+    mutationFn: async (plan?: RouterPlan) => {
+      const r = await api.createDevice({
+        name: plan?.name ?? (name.trim() || choice!.label),
         type: choice!.type,
-        brand: tvBrand?.brand ?? choice!.brand,
-        setup_method: tvBrand?.method ?? choice!.method,
-      }),
+        brand: plan?.brand ?? tvBrand?.brand ?? choice!.brand,
+        setup_method: plan?.method ?? tvBrand?.method ?? choice!.method,
+      })
+      if (!plan?.linkedIp) return r
+      // Plain DNS on the router: QuietNet tells this home apart by its public IP.
+      const { device } = await api.patchDevice(r.device.id, { linked_ip: plan.linkedIp, allow_shared_ipv4: true })
+      return { ...r, device, setup: await api.setup(device.id) }
+    },
     onSuccess: (r) => {
       setCreated(r)
       qc.invalidateQueries({ queryKey: ['devices'] })
@@ -63,18 +76,60 @@ export default function Setup() {
 
   const health = useQuery({ queryKey: ['health'], queryFn: api.health })
   const assistantReady = !!health.data?.companion.connected
+  const aiReady = !!health.data?.llm.enabled
+  const added = useQuery({ queryKey: ['devices'], queryFn: api.devices, enabled: !!first, refetchInterval: 10000 })
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <Link to="/devices" className="inline-flex items-center gap-1 text-sm text-muted hover:text-slate-100">
-        <ArrowLeft className="h-4 w-4" /> Devices
-      </Link>
-      <h1 className="mt-3 text-2xl font-bold">Connect a device</h1>
+    <div className="max-w-5xl">
+      {first ? (
+        <h1 className="page-title">
+          Add your first <span className="text-guard">device</span>
+        </h1>
+      ) : (
+        <>
+          <Link to="/devices" className="group inline-flex items-center gap-1 text-sm text-muted transition hover:text-white">
+            <ArrowLeft className="h-4 w-4 transition-transform motion-safe:group-hover:-translate-x-1" /> <span className="underline-slide">Devices</span>
+          </Link>
+          <h1 className="page-title mt-4">
+            Connect a <span className="text-guard">device</span>
+          </h1>
+        </>
+      )}
 
       {!created && (
         <>
-          <p className="mt-1 text-sm text-muted">Pick what you want to protect. Each device gets its own private address.</p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <p className="mt-2 max-w-2xl text-sm text-muted">
+            {first
+              ? 'QuietNet sees nothing until a device sends it its lookups. Pick what you want to protect to get its steps. It takes about a minute, no hardware needed.'
+              : 'Pick what you want to protect. Each device gets its own private address.'}
+          </p>
+
+          {first && !!added.data?.length && (
+            <div className="card mt-6 max-w-3xl p-4">
+              <div className="text-sm font-medium">Devices you’ve added</div>
+              <ul className="mt-2 divide-y divide-line">
+                {added.data.map((d) => (
+                  <li key={d.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 text-sm">
+                    <DeviceIcon type={d.type} className="h-4 w-4 shrink-0 text-brand-soft" />
+                    <span className="min-w-0 truncate">{d.name}</span>
+                    <span className={`text-xs ${d.last_seen ? 'text-guard' : 'text-muted'}`}>
+                      {d.last_seen ? 'sending lookups' : 'waiting for its first lookup'}
+                    </span>
+                    {d.last_seen ? (
+                      <button className="ml-auto text-guard" onClick={onDone}>
+                        <span className="underline-slide">See what it’s doing</span>
+                      </button>
+                    ) : (
+                      <Link to={`/devices/${d.id}`} className="ml-auto text-guard">
+                        <span className="underline-slide">Finish its steps</span>
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {CHOICES.map((c) => (
               <button
                 key={c.key}
@@ -82,11 +137,11 @@ export default function Setup() {
                   setChoice(c)
                   setTvBrand(null)
                 }}
-                className={`card flex items-center gap-3 p-4 text-left hover:border-muted ${choice?.key === c.key ? 'border-accent' : ''}`}
+                className={`card group flex items-center gap-3 p-4 text-left ${choice?.key === c.key ? 'border-guard' : 'card-link'}`}
               >
-                <DeviceIcon type={c.type} className="h-6 w-6 text-accent" />
+                <DeviceIcon type={c.type} className="h-6 w-6 shrink-0 text-brand-soft transition-transform motion-safe:group-hover:scale-110" />
                 <div>
-                  <div className="font-semibold">{c.label}</div>
+                  <div className="font-medium">{c.label}</div>
                   <div className="text-xs text-muted">{c.hint}</div>
                 </div>
               </button>
@@ -94,25 +149,25 @@ export default function Setup() {
           </div>
 
           {choice?.key === 'tv' && (
-            <div className="card mt-4 p-4">
+            <div className="card mt-4 max-w-3xl p-4">
               {assistantReady && (
-                <div className="mb-4 rounded-xl border border-accent/40 bg-accent/10 p-4">
-                  <div className="flex items-center gap-2 font-semibold">
-                    <Sparkles className="h-4 w-4 text-accent" /> Let Pahra find and set up your TV
+                <div className="mb-5 rounded-md border border-line bg-ink p-4">
+                  <div className="flex items-center gap-2 font-display text-lg">
+                    <Sparkles className="h-4 w-4 text-guard" /> Let QuietNet find and set up your TV
                   </div>
                   <p className="mt-1 text-sm text-muted">
-                    Describe it and Pahra scans your WiFi, then sets it up automatically if it can, or gives exact steps if it can't.
+                    Describe it and QuietNet scans your WiFi, then sets it up automatically if it can, or gives exact steps if it can't.
                   </p>
                   <AssistantPanel onConnected={() => qc.invalidateQueries({ queryKey: ['devices'] })} />
                 </div>
               )}
-              <div className="text-sm font-semibold">Or set it up manually. Which TV?</div>
+              <div className="text-sm font-medium">Or set it up manually. Which TV?</div>
               <div className="mt-2 grid grid-cols-2 gap-2">
                 {TV_BRANDS.map((b) => (
                   <button
                     key={b.brand}
                     onClick={() => setTvBrand(b)}
-                    className={`rounded-xl border px-3 py-2 text-sm ${tvBrand?.brand === b.brand ? 'border-accent bg-accent/10' : 'border-line'}`}
+                    className={`rounded-full border px-3 py-2 text-sm transition ${tvBrand?.brand === b.brand ? 'border-white bg-white text-ink' : 'border-line hover:border-line-strong'}`}
                   >
                     {b.label}
                   </button>
@@ -121,9 +176,21 @@ export default function Setup() {
             </div>
           )}
 
-          {choice && (choice.key !== 'tv' || tvBrand) && (
-            <div className="card mt-4 grid gap-3 p-4">
-              <label className="text-sm">
+          {choice?.key === 'router' && (
+            <RouterWizard
+              onCreate={(plan) => create.mutate(plan)}
+              onPerDevice={() => {
+                setChoice(null)
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
+              busy={create.isPending}
+              error={create.isError ? (create.error as Error).message : null}
+            />
+          )}
+
+          {choice && choice.key !== 'router' && (choice.key !== 'tv' || tvBrand) && (
+            <div className="card mt-4 grid max-w-3xl gap-3 p-4">
+              <label className="text-sm font-medium">
                 Name it
                 <input
                   className="input mt-1"
@@ -132,8 +199,8 @@ export default function Setup() {
                   onChange={(e) => setName(e.target.value)}
                 />
               </label>
-              <button className="btn-primary" disabled={create.isPending} onClick={() => create.mutate()}>
-                {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Get my setup steps
+              <button className="btn-primary" disabled={create.isPending} onClick={() => create.mutate(undefined)}>
+                <Roll>{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Get my setup steps</Roll>
               </button>
               {create.isError && <div className="text-sm text-danger">{(create.error as Error).message}</div>}
             </div>
@@ -142,7 +209,7 @@ export default function Setup() {
       )}
 
       {created && (
-        <div className="mt-5 grid gap-4">
+        <div className="mt-5 grid max-w-3xl gap-4">
           <div className={`card flex items-center gap-3 p-4 ${connected ? 'border-guard/60' : ''}`}>
             {connected ? (
               <CheckCircle2 className="h-6 w-6 text-guard" />
@@ -150,21 +217,29 @@ export default function Setup() {
               <Loader2 className="h-6 w-6 animate-spin text-muted" />
             )}
             <div>
-              <div className="font-semibold">{connected ? `${created.device.name} is protected` : 'Waiting for the first DNS query…'}</div>
+              <div className="font-medium">{connected ? `${created.device.name} is protected` : 'Waiting for the first DNS query…'}</div>
               <div className="text-xs text-muted">
                 {connected ? 'Its traffic now shows up in Suggestions.' : 'Follow the steps below; this turns green automatically.'}
               </div>
             </div>
-            {connected && (
-              <Link to="/" className="btn-primary ml-auto">
-                See what it's doing
-              </Link>
-            )}
+            {connected &&
+              (first ? (
+                <button className="btn-primary ml-auto" onClick={onDone}>
+                  <Roll>See what it's doing</Roll>
+                </button>
+              ) : (
+                <Link to="/" className="btn-primary ml-auto">
+                  <Roll>See what it's doing</Roll>
+                </Link>
+              ))}
           </div>
           <div className="card p-5">
-            <SetupSteps deviceId={created.device.id} guide={created.setup} brand={created.device.brand} />
+            <SetupSteps deviceId={created.device.id} guide={created.setup} brand={created.device.brand} type={created.device.type} />
           </div>
-          {created.device.type === 'router' || created.setup.method === 'ipv4_demo' ? <CgnatCheck /> : null}
+          {aiReady && <ScreenshotHelp deviceId={created.device.id} />}
+          <DoneCheck deviceId={created.device.id} aiHelp={aiReady} />
+          {created.setup.method === 'ipv4_demo' && <HomeAddress device={live.data ?? created.device} />}
+          {created.setup.method === 'ipv4_demo' && !created.device.linked_ip ? <CgnatCheck /> : null}
           <button
             className="btn-ghost w-fit"
             onClick={() => {
@@ -174,7 +249,7 @@ export default function Setup() {
               setName('')
             }}
           >
-            Add another device
+            <Roll>Add another device</Roll>
           </button>
         </div>
       )}
@@ -187,18 +262,18 @@ function CgnatCheck() {
   const check = useMutation({ mutationFn: () => api.cgnat(wan.trim()) })
   return (
     <div className="card p-4 text-sm">
-      <div className="font-semibold">Is your internet behind CGNAT?</div>
+      <div className="font-display text-lg">Is your internet behind CGNAT?</div>
       <p className="mt-1 text-muted">
         JioFiber, Airtel and ACT often share one public IP between many homes. Type the WAN IP from your router's status page.
       </p>
       <div className="mt-3 flex gap-2">
         <input className="input" placeholder="e.g. 100.72.14.9" value={wan} onChange={(e) => setWan(e.target.value)} />
         <button className="btn-ghost" disabled={!wan || check.isPending} onClick={() => check.mutate()}>
-          Check
+          <Roll>Check</Roll>
         </button>
       </div>
       {check.data && (
-        <div className={`mt-3 rounded-xl p-3 ${check.data.cgnat ? 'bg-warn/10 text-warn' : 'bg-guard/10 text-guard'}`}>
+        <div className={`mt-3 rounded-md p-3 ${check.data.cgnat ? 'bg-warn/10 text-warn' : 'bg-guard/10 text-guard'}`}>
           {check.data.advice}
           {check.data.public_ip && <div className="mt-1 text-xs text-muted">Your public IP: {check.data.public_ip}</div>}
         </div>

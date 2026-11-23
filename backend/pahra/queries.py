@@ -184,6 +184,72 @@ def device_activity(conn: sqlite3.Connection, user_id: str, device_id: str) -> l
     return out
 
 
+def blocked_domains(conn: sqlite3.Connection, user_id: str) -> list[dict]:
+    """Every block rule in force: household and per-device blocks, plus quarantines a household rule doesn't override.
+
+    Each row carries what we know about the domain, which devices it applies to, how often those devices were
+    stopped from reaching it, and the devices a per-device allow exempts from a household block.
+    """
+    per_device, household = _decision_index(conn, user_id)
+    devices = {r["id"]: dict(r) for r in conn.execute("SELECT id, name, type FROM devices WHERE user_id = ?", (user_id,))}
+    stats: dict[tuple[str, str], dict] = {}
+    for r in conn.execute(
+        "SELECT e.device_id, e.domain, e.count, e.blocked_count, e.last_ts FROM events e "
+        "JOIN devices v ON v.id = e.device_id WHERE v.user_id = ?",
+        (user_id,),
+    ):
+        stats[(r["device_id"], r["domain"])] = dict(r)
+    info = {
+        r["domain"]: dict(r)
+        for r in conn.execute(
+            "SELECT domain, category, owner, what_it_does, confidence, break_risk, break_note FROM domains WHERE domain IN "
+            "(SELECT domain FROM decisions WHERE user_id = ? AND undone_at IS NULL)",
+            (user_id,),
+        )
+    }
+
+    rules = [d for d in household.values() if d["action"] == "block"]
+    rules += [
+        d
+        for (_, dom), d in per_device.items()
+        if d["action"] == "block" or (d["action"] == "quarantine" and dom not in household)
+    ]
+    out = []
+    for d in rules:
+        dom = d["domain"]
+        if d["device_id"]:
+            scope_ids = [d["device_id"]]
+            exempt: list[str] = []
+        else:
+            exempt = [i for i in devices if (m := per_device.get((i, dom))) and m["action"] == "allow"]
+            scope_ids = [i for i in devices if i not in exempt]
+        hits = [stats[(i, dom)] for i in scope_ids if (i, dom) in stats]
+        meta = info.get(dom, {})
+        dev = devices.get(d["device_id"]) if d["device_id"] else None
+        out.append(
+            {
+                "id": d["id"],
+                "domain": dom,
+                "action": d["action"],
+                "decided_by": d["decided_by"],
+                "created_at": d["created_at"],
+                "device": {"id": dev["id"], "name": dev["name"], "type": dev["type"]} if dev else None,
+                "allowed_on": [{"id": i, "name": devices[i]["name"]} for i in exempt],
+                "category": meta.get("category") or "unknown",
+                "owner": meta.get("owner"),
+                "what_it_does": meta.get("what_it_does"),
+                "confidence": meta.get("confidence"),
+                "break_risk": meta.get("break_risk"),
+                "break_note": meta.get("break_note"),
+                "must_allow": is_must_allow_any_device(dom),
+                "blocked_count": sum(h["blocked_count"] for h in hits),
+                "last_seen": max((h["last_ts"] for h in hits), default=None),
+            }
+        )
+    out.sort(key=lambda b: b["created_at"], reverse=True)
+    return out
+
+
 def weekly_report(conn: sqlite3.Connection, user_id: str) -> dict:
     since = to_iso(datetime.now(timezone.utc) - timedelta(days=7))
     rows = _rows(conn, user_id, since=since)

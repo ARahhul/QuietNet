@@ -1,0 +1,126 @@
+TASK: BUILD QUIETNET'S AD AND TRACKER DOMAIN DATASET (1 TO 2 LAKH DOMAINS)
+
+GOAL
+Build a clean, labelled list of 1,00,000 to 2,00,000 domains that are known for ads, tracking,
+telemetry, malware or phishing. QuietNet checks every domain a home device looks up against this
+list. A match on a strong enough list gets blocked straight away, and Gemini uses the labels to
+explain to the user what the domain is.
+
+Getting the count is the easy part. Merging public blocklists gives more than 5 lakh domains in a
+few minutes. The real work is picking the RIGHT 1-2 lakh, labelling them, and making sure nothing
+on the list breaks a phone, TV or app.
+
+Numbers measured on 22 Nov 2026 (unique domains):
+  HaGeZi Pro ............. 2,83,999
+  OISD big ............... 2,24,385
+  AdGuard DNS filter ..... 1,91,774
+  StevenBlack hosts ......   76,106
+  All lists merged ....... about 5.3 lakh
+  On 2 or more of these 4 lists ... about 1.71 lakh   <- start here
+  On 3 or more ................... about 71,000
+  On all 4 ....................... about 3,100
+
+
+WHAT TO DELIVER
+1. domains.csv with these columns:
+     domain        lowercase, no "*." or "www." prefix, no trailing dot. Example: ads.example.com
+     category      one of: ads, tracking, telemetry, acr (TV viewing data), malware, phishing
+     owner         company behind it if known (e.g. Google, Criteo, Samsung), else empty
+     sources       list names that contain it, separated by ";" (e.g. hagezi-pro;oisd-big)
+     source_count  how many lists contain it
+     notes         anything odd ("CAUTION: also used for login", "only seen on TVs", etc.)
+2. domains.txt: just the domains, one per line, same order as the CSV.
+3. sources.txt: every list you used, with its URL, the date you downloaded it, how many domains it
+   gave, and its license.
+4. A short summary: total count, count per category, and anything you removed and why.
+
+
+STEPS
+
+Step 1 - Download the lists (all URLs work as of 22 Nov 2026)
+  HaGeZi Pro          https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro-onlydomains.txt
+  OISD big            https://big.oisd.nl/domainswild
+  AdGuard DNS filter  https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt
+  StevenBlack hosts   https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts
+  Device lists (telemetry from TVs, phones, Windows) - replace NAME with samsung, lgwebos, amazon,
+  roku, xiaomi, apple, tiktok, winoffice:
+    https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/native.NAME-onlydomains.txt
+  Perflyst smart TV   https://raw.githubusercontent.com/Perflyst/PiHoleBlocklist/master/SmartTV.txt
+  Perflyst Fire TV    https://raw.githubusercontent.com/Perflyst/PiHoleBlocklist/master/AmazonFireTV.txt
+  Malware/phishing    https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/tif-onlydomains.txt
+                      https://phishing.army/download/phishing_army_blocklist.txt
+  More lists are in docs/ad-tracker-references.txt.
+
+Step 2 - Clean every line into a plain domain
+  The lists come in different formats. Turn each line into a bare domain:
+    0.0.0.0 ads.example.com     ->  ads.example.com   (hosts format)
+    *.ads.example.com           ->  ads.example.com   (wildcard format)
+    ||ads.example.com^          ->  ads.example.com   (AdGuard/adblock format)
+  Then:
+  - skip comment lines (starting with #, ! or [) and empty lines;
+  - lowercase everything and remove trailing dots;
+  - drop localhost, 0.0.0.0, broadcasthost, raw IP addresses, and anything without a dot;
+  - in adblock lists, keep only simple rules of the form ||domain^ (skip rules with paths, $ options
+    or @@ exceptions).
+
+Step 3 - Merge and count
+  Merge all lists and remove duplicates. For each domain, record which lists had it.
+  If a parent domain is already on the list, its subdomains can be dropped
+  (e.g. if doubleclick.net is listed, ad.doubleclick.net is not needed).
+
+Step 4 - Choose the 1-2 lakh
+  - Take every domain on 2 or more of the 4 big lists (about 1.71 lakh). This matches QuietNet's
+    own rule: 2+ lists = high confidence.
+  - Add ALL device-list, Perflyst, malware and phishing domains even if only one list has them.
+    These are small and very relevant to us.
+  - If you are still under 1 lakh, or need to cut back to 2 lakh, use source_count to decide.
+
+Step 5 - Label each domain
+  - Malware or phishing feed -> malware / phishing.
+  - HaGeZi device lists or Perflyst -> telemetry (or acr for TV viewing-data domains such as
+    samsungacr.com, alphonso.tv, samba.tv).
+  - For the rest, look the domain up in DuckDuckGo Tracker Radar
+    (https://staticcdn.duckduckgo.com/trackerblocking/v6/current/extension-tds.json, under "trackers")
+    and Disconnect (https://raw.githubusercontent.com/disconnectme/disconnect-tracking-protection/master/services.json).
+    They give the owner company and the category: Advertising -> ads; Analytics, Audience
+    Measurement, Session Replay, Action Pixels -> tracking.
+  - If nothing says what it is, put ads for ad-looking names (ads., adserver, banner) and tracking
+    otherwise, and write "unconfirmed" in notes.
+
+Step 6 - Remove things that would break devices (VERY IMPORTANT)
+  - Remove every domain in backend/pahra/data/must_allow.yaml, and all their subdomains: time
+    servers, connectivity checks, app stores, push notifications, Netflix, YouTube, Prime Video,
+    Hotstar, JioCinema, Spotify, WhatsApp, TV firmware updates, Windows Update.
+  - Check the list against the Tranco top 1 million popular sites
+    (https://tranco-list.eu/top-1m.csv.zip). Any domain in the top 10,000 is probably a real
+    service. Don't delete it automatically: put it in a separate review.csv and check it by hand.
+  - Mark with CAUTION in notes anything that also serves logins, payments, maps, video or app
+    links (for example connect.facebook.net, branch.io).
+
+Step 7 - India extras (manual research)
+  Look for ad, analytics and engagement SDKs common in Indian apps that the global lists may miss,
+  e.g. InMobi / Glance, CleverTap, MoEngage, WebEngage, Netcore. Find their tracking domains
+  (Exodus Privacy lists trackers found in Android apps: https://reports.exodus-privacy.eu.org/en/trackers/).
+  Add them with the source "manual" and a link in notes showing where you found each one.
+
+Step 8 - Check your work
+  - Pick 200 random domains and look each one up. Is it really ads/tracking? Write down how many were
+    wrong.
+  - Confirm that zero must-allow domains are left.
+  - Confirm that the final count is between 1,00,000 and 2,00,000.
+
+
+RULES
+- Only use public lists and sources. Write down where every domain came from (the sources column).
+- Record each list's license in sources.txt. Some lists (GPL) have conditions if we ship them inside
+  the product.
+- Write the steps as a script (Python is fine) so we can re-run it every week. Lists change daily.
+  Don't edit domains by hand except for the India extras and the review.csv decisions.
+- Don't include personal data or anything from our own users' DNS logs in the dataset.
+
+
+DONE WHEN
+- domains.csv, domains.txt, sources.txt and the summary are delivered.
+- 1,00,000 to 2,00,000 domains, each with a category, its sources and a source_count.
+- No must-allow domains, and the top-10,000 popular domains are reviewed by hand.
+- The script re-creates the files from scratch with one command.

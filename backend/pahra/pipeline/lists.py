@@ -45,7 +45,7 @@ SOURCES: list[ListSource] = [
     ListSource("Threat intel feeds (HaGeZi TIF, incl. abuse.ch)", "tif.mini", "threat"),
 ]
 
-# TDS category -> Pahra category
+# TDS category -> QuietNet category
 _TDS_CATEGORY = {
     "Advertising": "ads",
     "Ad Motivated Tracking": "tracking",

@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, ShieldCheck, Zap } from 'lucide-react'
+import { Loader2, Zap } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { api } from '../api'
+import AdHunt from '../components/AdHunt'
+import SiteFix from '../components/SiteFix'
 import SuggestionCard from '../components/SuggestionCard'
-import { DeviceIcon, Empty, useToast } from '../components/ui'
+import { DeviceIcon, Empty, FilterChip, Roll, useToast } from '../components/ui'
+import Setup from './Setup'
 
 export default function Suggestions() {
   const qc = useQueryClient()
@@ -12,6 +14,11 @@ export default function Suggestions() {
   const [deviceId, setDeviceId] = useState<string | undefined>()
   const [later, setLater] = useState<Set<string>>(new Set())
   const devices = useQuery({ queryKey: ['devices'], queryFn: api.devices, refetchInterval: 10000 })
+  // Until one of the home's devices has sent a lookup there is nothing to suggest or hunt ads in, so the home page
+  // leads with the steps to add one. Decided once the device list arrives and kept while the person follows the
+  // steps, so the page doesn't swap under them the moment the new device connects.
+  const [steps, setSteps] = useState<boolean | null>(null)
+  if (steps === null && devices.data) setSteps(!devices.data.some((d) => d.last_seen))
   const sugg = useQuery({
     queryKey: ['suggestions', deviceId],
     queryFn: () => api.suggestions(deviceId),
@@ -37,50 +44,61 @@ export default function Suggestions() {
     },
   })
 
-  if (devices.data && devices.data.length === 0) {
+  if (steps === null && !devices.isError) {
     return (
-      <div className="mx-auto max-w-lg pt-10 text-center">
-        <ShieldCheck className="mx-auto h-14 w-14 text-guard" />
-        <h1 className="mt-4 text-2xl font-bold">See who's feeding on your home network</h1>
-        <p className="mt-2 text-muted">Connect your first device in under a minute. No hardware needed.</p>
-        <Link to="/setup" className="btn-primary mt-6">
-          <Plus className="h-4 w-4" /> Connect a device
-        </Link>
+      <div className="flex items-center gap-2 text-sm text-muted">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading your home…
       </div>
+    )
+  }
+  if (steps) {
+    return (
+      <Setup
+        first
+        onDone={() => {
+          setSteps(false)
+          refresh()
+        }}
+      />
     )
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Suggestions</h1>
-          <p className="mt-1 text-sm text-muted">
-            {cards.length} things to review{companies ? ` from ${companies} companies` : ''}. Pahra explains each one; you decide.
+          <h1 className="page-title">Suggestions</h1>
+          <p className="mt-2 text-sm text-muted">
+            {cards.length} things to review{companies ? ` from ${companies} companies` : ''}. QuietNet explains each one; you decide.
           </p>
         </div>
-        <button className="btn-primary px-5 py-3 text-base" disabled={!blockable.length || bulk.isPending} onClick={() => bulk.mutate()}>
-          <Zap className="h-5 w-5" /> Block all ads & trackers{blockable.length ? ` (${blockable.length})` : ''}
+        <button className="btn-primary px-6 py-3 text-base" disabled={!blockable.length || bulk.isPending} onClick={() => bulk.mutate()}>
+          <Roll><Zap className="h-5 w-5" /> Block all ads & trackers{blockable.length ? ` (${blockable.length})` : ''}</Roll>
         </button>
       </div>
 
-      <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
-        <Chip active={!deviceId} onClick={() => setDeviceId(undefined)}>
+      <div className="mt-6 flex gap-2 overflow-x-auto pb-1">
+        <FilterChip active={!deviceId} onClick={() => setDeviceId(undefined)}>
           All devices
-        </Chip>
+        </FilterChip>
         {devices.data?.map((d) => (
-          <Chip key={d.id} active={deviceId === d.id} onClick={() => setDeviceId(d.id)}>
+          <FilterChip key={d.id} active={deviceId === d.id} onClick={() => setDeviceId(d.id)}>
             <DeviceIcon type={d.type} className="h-3.5 w-3.5" /> {d.name}
-          </Chip>
+          </FilterChip>
         ))}
       </div>
 
-      <div className="mt-5 grid gap-4">
-        {sugg.isLoading && <div className="text-muted">Loading…</div>}
+      <div className="mt-5 grid items-start gap-4 xl:grid-cols-2">
+        <AdHunt deviceId={deviceId} deviceName={devices.data?.find((d) => d.id === deviceId)?.name} />
+        <SiteFix deviceId={deviceId} deviceName={devices.data?.find((d) => d.id === deviceId)?.name} />
+      </div>
+
+      <div className="mt-5 grid gap-4 xl:grid-cols-2 min-[1800px]:grid-cols-3">
+        {sugg.isLoading && <div className="col-span-full text-muted">Loading…</div>}
         {!sugg.isLoading && cards.length === 0 && (
           <Empty title="All clear">
             Nothing new to review. New domains are checked every 30 seconds.{' '}
-            <button className="text-accent hover:underline" onClick={() => api.pollNow().then(() => setTimeout(refresh, 1500))}>
+            <button className="underline-slide text-guard" onClick={() => api.pollNow().then(() => setTimeout(refresh, 1500))}>
               Check now
             </button>
           </Empty>
@@ -90,16 +108,5 @@ export default function Suggestions() {
         ))}
       </div>
     </div>
-  )
-}
-
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs ${active ? 'border-accent bg-accent/15 text-white' : 'border-line text-muted hover:text-slate-100'}`}
-    >
-      {children}
-    </button>
   )
 }

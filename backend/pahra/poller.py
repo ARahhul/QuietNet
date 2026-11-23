@@ -7,6 +7,7 @@ sleeps and comes back, polling resumes where it left off (AdGuard keeps 24 h of 
 import asyncio
 import logging
 import sqlite3
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable
@@ -20,6 +21,7 @@ from .timeutil import parse_ag_time, to_iso
 log = logging.getLogger("pahra.poller")
 
 PAGE = 500
+KEEP_DEFAULT_HOURS = 24
 MAX_PAGES = 20
 FIRST_RUN_WINDOW = timedelta(hours=1)
 
@@ -43,22 +45,40 @@ class Poller:
         interval_s: int,
         on_observed: Callable[[list[Observed]], Awaitable[None]] | None = None,
         on_tick: Callable[[], Awaitable[None]] | None = None,
+        keep_hours: int = KEEP_DEFAULT_HOURS,
     ):
         self.conn = conn
         self.ag = ag
         self.interval_s = interval_s
+        self.keep_hours = keep_hours
         self.on_observed = on_observed
         self.on_tick = on_tick
         self.last_poll: str | None = None
         self.last_error: str | None = None
         self._wake = asyncio.Event()
+        self.running = False
+        self.read_until = 0.0  # monotonic time up to which the query log has been read and processed
 
     def poke(self) -> None:
         """Poll now instead of waiting for the next tick (e.g. right after a device is added)."""
         self._wake.set()
 
+    async def poll_fresh(self, timeout: float = 8.0) -> None:
+        """Return once the query log has been read from now (for "is it working yet?" checks)."""
+        if not self.running:  # no background loop (tests, CLI): poll right here
+            observed = await self.poll_once()
+            if observed and self.on_observed:
+                await self.on_observed(observed)
+            return
+        t0 = time.monotonic()
+        self.poke()
+        while self.read_until < t0 and time.monotonic() < t0 + timeout:
+            await asyncio.sleep(0.2)
+
     async def run_forever(self) -> None:
+        self.running = True
         while True:
+            started = time.monotonic()
             try:
                 observed = await self.poll_once()
                 if observed and self.on_observed:
@@ -71,6 +91,7 @@ class Poller:
                 log.warning("poll failed: %s", e)
             except Exception:  # keep the loop alive; log the bug
                 log.exception("poller iteration crashed")
+            self.read_until = started
             try:
                 await asyncio.wait_for(self._wake.wait(), timeout=self.interval_s)
             except asyncio.TimeoutError:
@@ -118,6 +139,7 @@ class Poller:
         by_cid, by_ip = self._device_maps()
         observed: dict[tuple[str, str], Observed] = {}
         last_seen: dict[str, datetime] = {}
+        entries.reverse()  # AdGuard lists newest first; reversing keeps arrival order for equal timestamps
         entries.sort(key=lambda e: e["_t"])
         for e in entries:
             cid = e.get("client_id") or (e.get("client_info") or {}).get("name") or ""
@@ -130,6 +152,7 @@ class Poller:
             domain = normalize_domain(qname)
             blocked = str(e.get("reason", "")).startswith("Filtered")
             gap = ingest_event(self.conn, dev, domain, e["_t"], blocked)
+            log_query(self.conn, dev, qname, domain, e, blocked)
             ob = observed.setdefault((dev, domain), Observed(dev, domain))
             ob.qnames.add(qname)
             ob.is_new = ob.is_new or gap is None
@@ -140,4 +163,43 @@ class Poller:
             self.conn.execute("UPDATE devices SET last_seen = ? WHERE id = ?", (to_iso(t), dev))
         newest = max(entries, key=lambda e: e["_t"])
         set_meta(self.conn, "querylog_cursor", newest["time"])
+        prune_queries(self.conn, self.keep_hours)
         return list(observed.values())
+
+
+def log_query(conn: sqlite3.Connection, device_id: str, qname: str, domain: str, e: dict, blocked: bool) -> None:
+    """Keep one AdGuard query-log entry for the live view and the report charts."""
+    if blocked:
+        status = "blocked"
+        # rules from filter_list_id 0 are AdGuard's custom rules, which only QuietNet writes
+        ours = any(not (r or {}).get("filter_list_id") for r in (e.get("rules") or []))
+        blocked_by = "rule" if ours else "list"
+    else:
+        status = "cached" if e.get("cached") else "allowed"
+        blocked_by = None
+    try:
+        elapsed = float(e.get("elapsedMs") or 0) or None
+    except (TypeError, ValueError):
+        elapsed = None
+    conn.execute(
+        "INSERT INTO queries(device_id, t, qname, domain, qtype, client_ip, proto, status, blocked_by, upstream, elapsed_ms) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            device_id,
+            e["_t"].timestamp(),
+            qname,
+            domain,
+            (e.get("question") or {}).get("type"),
+            e.get("client") or None,
+            e.get("client_proto") or None,
+            status,
+            blocked_by,
+            e.get("upstream") or None,
+            elapsed,
+        ),
+    )
+
+
+def prune_queries(conn: sqlite3.Connection, keep_hours: int) -> int:
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=keep_hours)).timestamp()
+    return conn.execute("DELETE FROM queries WHERE t < ?", (cutoff,)).rowcount

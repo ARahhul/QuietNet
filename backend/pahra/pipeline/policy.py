@@ -32,7 +32,9 @@ def apply_policy(conn: sqlite3.Connection, device_id: str, domain: str, qnames: 
     user = conn.execute("SELECT * FROM users WHERE id = ?", (dev["user_id"],)).fetchone()
     sig = dom["signals"] or {}
     mine = active_decision(conn, domain, device_id)
-    household = active_decision(conn, domain, None)
+    household = active_decision(conn, domain, None, dev["user_id"])
+    # The person let it through (e.g. "Site not working?"): nothing automatic blocks it again.
+    let_through = any(d and d["action"] == "allow" for d in (mine, household))
     changed = False
 
     # 1. must-allow: never auto-block, release any quarantine
@@ -44,12 +46,19 @@ def apply_policy(conn: sqlite3.Connection, device_id: str, domain: str, qnames: 
 
     # 2. known malware / phishing: always block for this device + alert
     if dom["category"] == "malware":
+        if let_through:
+            create_alert(
+                conn, user_id=dev["user_id"], device=dev, type_="malware", domain=domain,
+                message=f"Your {dev['name']} reached {domain}, which is on a malware list. You unblocked it, so QuietNet "
+                "let it through. Block it again from Live or Suggestions if that wasn't on purpose.",
+            )
+            return changed
         if not (mine and mine["action"] == "block") and not (household and household["action"] == "block"):
             create_decision(conn, dev["user_id"], domain, "block", device_id=device_id, decided_by="auto")
             changed = True
         create_alert(
             conn, user_id=dev["user_id"], device=dev, type_="malware", domain=domain,
-            message=f"Your {dev['name']} tried to reach a known malicious site ({domain}). Pahra blocked it.",
+            message=f"Your {dev['name']} tried to reach a known malicious site ({domain}). QuietNet blocked it.",
         )
         return changed
 
@@ -58,11 +67,13 @@ def apply_policy(conn: sqlite3.Connection, device_id: str, domain: str, qnames: 
         conn.execute("UPDATE decisions SET undone_at = ? WHERE id = ?", (now_iso(), mine["id"]))
         mine, changed = None, True
 
-    # 4. auto-mode: HIGH confidence ads/trackers get blocked without asking (then notify)
+    # 4. auto-mode: HIGH confidence ads/trackers get blocked without asking (then notify), but only when
+    #    blocking them is low risk; anything that might break an app or site waits in Suggestions for the person.
     if (
         user["auto_mode"]
         and dom["confidence"] == "high"
         and dom["category"] in AUTO_BLOCK_CATEGORIES
+        and dom["break_risk"] == "low"
         and (mine is None or mine["action"] == "quarantine")
         and household is None
     ):

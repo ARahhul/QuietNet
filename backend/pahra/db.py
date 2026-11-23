@@ -28,9 +28,15 @@ def init_sqlite_wal(db_path: str = "pahra.db") -> sqlite3.Connection:
 
 def _migrate(conn: sqlite3.Connection) -> None:
     """Columns added after the first release (CREATE TABLE IF NOT EXISTS doesn't add them)."""
+    users = {r["name"] for r in conn.execute("PRAGMA table_info(users)")}
+    if "firebase_uid" not in users:
+        conn.execute("ALTER TABLE users ADD COLUMN firebase_uid TEXT")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_firebase ON users(firebase_uid) WHERE firebase_uid IS NOT NULL")
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(devices)")}
     if "lan_ip" not in cols:
         conn.execute("ALTER TABLE devices ADD COLUMN lan_ip TEXT")
+    if "ddns_host" not in cols:
+        conn.execute("ALTER TABLE devices ADD COLUMN ddns_host TEXT")
 
 
 def now_iso() -> str:

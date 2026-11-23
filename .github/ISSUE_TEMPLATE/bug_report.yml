@@ -1,0 +1,30 @@
+name: Bug report
+description: Something in QuietNet isn't working
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you see instead?
+    validations: { required: true }
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations: { required: true }
+  - type: dropdown
+    id: mode
+    attributes:
+      label: How are you running QuietNet?
+      options:
+        - Local with the fake AdGuard (dev.ps1)
+        - Local engine with a real VM
+        - Everything on the VM (cloud mode)
+        - quietnet.in
+    validations: { required: true }
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Remove IP addresses, tokens and anything private first.

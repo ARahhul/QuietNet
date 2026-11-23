@@ -5,10 +5,10 @@ from pydantic import BaseModel, Field
 
 from ..adguard.client import AdGuardError
 from ..db import rows_to_dicts
-from ..decisions import DecisionError, create_decision, get_decision, undo_decision
+from ..decisions import DecisionError, create_decision, get_decision, reinstate, undo_decision
 from ..engine import Engine
 from ..knowledge import is_must_allow_any_device
-from ..queries import CONF_RANK, suggestions
+from ..queries import CONF_RANK, blocked_domains, suggestions
 from .deps import engine
 
 router = APIRouter(tags=["suggestions & decisions"])
@@ -33,6 +33,8 @@ class BulkIn(BaseModel):
 
 class UndoBulkIn(BaseModel):
     ids: list[str]
+    # Decisions the undone ones replaced, to put back (undoing an unblock restores the block it lifted)
+    restore: list[str] = Field(default_factory=list, max_length=200)
 
 
 async def _push(e: Engine) -> bool:
@@ -52,6 +54,12 @@ async def get_suggestions(device_id: str | None = None, e: Engine = Depends(engi
 async def list_decisions(active: bool = True, e: Engine = Depends(engine)):
     sql = "SELECT * FROM decisions WHERE user_id = ?" + (" AND undone_at IS NULL" if active else "")
     return rows_to_dicts(e.conn.execute(sql + " ORDER BY created_at DESC LIMIT 500", (e.user_id,)))
+
+
+@router.get("/blocked")
+async def list_blocked(e: Engine = Depends(engine)):
+    """Every domain blocked right now, household-wide or on one device, newest first."""
+    return blocked_domains(e.conn, e.user_id)
 
 
 @router.post("/decisions", status_code=201)
@@ -103,4 +111,5 @@ async def undo_bulk(body: UndoBulkIn, e: Engine = Depends(engine)):
     for i in body.ids:
         if get_decision(e.conn, i):
             out.append(undo_decision(e.conn, e.user_id, i))
-    return {"count": len(out), "synced": await _push(e)}
+    restored = [d for i in body.restore if (d := reinstate(e.conn, e.user_id, i))]
+    return {"count": len(out), "restored": len(restored), "synced": await _push(e)}
