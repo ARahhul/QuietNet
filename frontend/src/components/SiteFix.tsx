@@ -3,6 +3,7 @@ import { ImagePlus, Loader2, SearchCheck, ShieldOff, TriangleAlert, Wrench, X } 
 import { useCallback, useRef, useState, type ClipboardEvent } from 'react'
 import { api, type SiteCandidate, type SiteFix as Fix } from '../api'
 import { shrink } from '../lib/image'
+import { ViewButton } from './DomainView'
 import { ConfidenceChip, Roll, timeAgo, useToast } from './ui'
 
 const WHEN = [
@@ -16,7 +17,8 @@ const BLOCKED_BY: Record<SiteCandidate['blocked_by'], string> = {
   yours: 'Your rule',
   auto: 'Auto-mode',
   held: 'Held as new',
-  list: 'Block list',
+  blocklist: 'QuietNet list',
+  list: 'Threat list',
 }
 
 /**
@@ -191,7 +193,7 @@ export default function SiteFix({ deviceId, deviceName }: { deviceId?: string; d
             <>
               <ul className="mt-3 grid gap-2">
                 {result.candidates.map((c) => (
-                  <Candidate key={c.name} c={c} checked={picked.has(c.name)} onToggle={() => toggle(c.name)} />
+                  <Candidate key={c.name} c={c} deviceId={deviceId} checked={picked.has(c.name)} onToggle={() => toggle(c.name)} />
                 ))}
               </ul>
               <button className="btn-primary mt-3" disabled={!picked.size || unblock.isPending} onClick={() => unblock.mutate([...picked])}>
@@ -209,7 +211,7 @@ export default function SiteFix({ deviceId, deviceName }: { deviceId?: string; d
   )
 }
 
-function Candidate({ c, checked, onToggle }: { c: SiteCandidate; checked: boolean; onToggle: () => void }) {
+function Candidate({ c, deviceId, checked, onToggle }: { c: SiteCandidate; deviceId?: string; checked: boolean; onToggle: () => void }) {
   const others = c.looked_up.filter((n) => n !== c.name)
   return (
     <li>
@@ -231,6 +233,7 @@ function Candidate({ c, checked, onToggle }: { c: SiteCandidate; checked: boolea
           {others.length > 0 && <div className="mt-1 text-xs text-muted">Looked up as {others.join(', ')}</div>}
           {c.devices.length > 0 && <div className="mt-0.5 text-xs text-muted">Blocked on {c.devices.map((d) => d.name).join(', ')}</div>}
           {c.warning && <div className={`mt-1 text-xs ${c.category === 'malware' ? 'text-danger' : 'text-warn'}`}>{c.warning}</div>}
+          <ViewButton name={c.name} deviceId={deviceId ?? (c.devices.length === 1 ? c.devices[0].id : null)} variant="link" className="mt-1.5" />
         </div>
       </label>
     </li>

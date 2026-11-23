@@ -9,9 +9,11 @@ from HaGeZi's Threat Intelligence Feeds list (which aggregates abuse.ch and othe
 """
 
 import asyncio
+import io
 import json
 import logging
 import time
+import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -21,6 +23,9 @@ log = logging.getLogger("pahra.lists")
 
 HAGEZI = "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/{}-onlydomains.txt"
 TDS_URL = "https://staticcdn.duckduckgo.com/trackerblocking/v6/current/extension-tds.json"
+# Tranco: research ranking of the most visited sites. Its top names that no block list has are "clean" (never sent to AI).
+TRANCO_URL = "https://tranco-list.eu/top-1m.csv.zip"
+TRANCO_TOP_N = 10_000
 SAMPLE_DIR = Path(__file__).resolve().parent.parent / "data" / "sample_lists"
 MAX_AGE_S = 24 * 3600
 
@@ -111,6 +116,7 @@ class ListIndex:
     kinds: dict[str, str] = field(default_factory=dict)
     trackers: dict[str, TrackerInfo] = field(default_factory=dict)
     entity_domains: dict[str, str] = field(default_factory=dict)  # domain -> entity (TDS "domains")
+    popular: list[str] = field(default_factory=list)  # Tranco top N, most visited first
     loaded_from: str = "empty"
 
     # ---------------------------------------------------------------- lookups
@@ -147,7 +153,7 @@ class ListIndex:
         self.entity_domains = {k.lower(): v for k, v in (data.get("domains") or {}).items()}
 
     @classmethod
-    def from_dir(cls, directory: Path, label: str) -> "ListIndex":
+    def from_dir(cls, directory: Path, label: str, tranco_top_n: int = TRANCO_TOP_N) -> "ListIndex":
         idx = cls(loaded_from=label)
         for src in SOURCES:
             f = directory / f"{src.slug}.txt"
@@ -157,6 +163,8 @@ class ListIndex:
         tds = directory / "tds.json"
         if tds.exists():
             idx.load_tds(json.loads(tds.read_text(encoding="utf-8")))
+        if tranco_top_n > 0:
+            idx.popular = _read_tranco(directory, tranco_top_n)
         return idx
 
     @classmethod
@@ -168,7 +176,37 @@ class ListIndex:
             "loaded_from": self.loaded_from,
             "lists": {k: len(v) for k, v in self.lists.items()},
             "tracker_radar_entries": len(self.trackers),
+            "popular_sites": len(self.popular),
         }
+
+
+def _tranco_rows(lines, n: int) -> list[str]:
+    out: list[str] = []
+    for line in lines:
+        if len(out) >= n:
+            break
+        line = line.strip().lower()
+        if not line or line.startswith("#"):
+            continue
+        name = line.split(",", 1)[-1].strip().strip(".")
+        if "." in name:
+            out.append(name)
+    return out
+
+
+def _read_tranco(directory: Path, n: int) -> list[str]:
+    """Top `n` names from the downloaded Tranco zip, or the bundled sample (`tranco.mini.csv`)."""
+    z = directory / "tranco.csv.zip"
+    try:
+        if z.exists():
+            with zipfile.ZipFile(z) as zf, zf.open(zf.namelist()[0]) as f:
+                return _tranco_rows(io.TextIOWrapper(f, encoding="utf-8", errors="ignore"), n)
+        mini = directory / "tranco.mini.csv"
+        if mini.exists():
+            return _tranco_rows(mini.read_text(encoding="utf-8").splitlines(), n)
+    except (OSError, zipfile.BadZipFile, IndexError) as e:
+        log.warning("could not read the Tranco list: %s", e)
+    return []
 
 
 async def _download(client: httpx.AsyncClient, url: str, dest: Path) -> None:
@@ -181,17 +219,19 @@ async def _download(client: httpx.AsyncClient, url: str, dest: Path) -> None:
     tmp.replace(dest)
 
 
-async def load_lists(cache_dir: Path, offline: bool = False) -> ListIndex:
+async def load_lists(cache_dir: Path, offline: bool = False, tranco_top_n: int = TRANCO_TOP_N) -> ListIndex:
     if offline:
         return ListIndex.sample()
     jobs = [(HAGEZI.format(s.slug), cache_dir / f"{s.slug}.txt") for s in SOURCES]
     jobs.append((TDS_URL, cache_dir / "tds.json"))
+    if tranco_top_n > 0:
+        jobs.append((TRANCO_URL, cache_dir / "tranco.csv.zip"))
     async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0), headers={"User-Agent": "pahra/0.1"}) as c:
         results = await asyncio.gather(*(_download(c, u, d) for u, d in jobs), return_exceptions=True)
     for (url, _), res in zip(jobs, results):
         if isinstance(res, Exception):
             log.warning("list download failed (%s): %s", url, res)
-    idx = ListIndex.from_dir(cache_dir, "downloaded")
+    idx = ListIndex.from_dir(cache_dir, "downloaded", tranco_top_n)
     if not idx.lists:
         log.warning("no lists available on disk; using bundled sample lists")
         return ListIndex.sample()

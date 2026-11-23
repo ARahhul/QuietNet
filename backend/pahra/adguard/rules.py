@@ -3,6 +3,10 @@
 All users share ONE AdGuard Home, so every rule QuietNet pushes MUST carry `$client`
 (SPEC §6.1). `build_adguard_rule` refuses to produce anything else and
 `assert_client_scoped` is re-checked on the whole compiled section before every push.
+
+The one deliberate global layer besides threat intel is QuietNet's block list (pahra.blocklist), loaded as its own
+AdGuard filter list. It only ever blocks (`||domain^`, no `@@`, no modifiers), so it can't open anything up for a
+home, and a home's own `@@...$client` allow rule here still lets a listed name through for that home alone.
 """
 
 import ipaddress

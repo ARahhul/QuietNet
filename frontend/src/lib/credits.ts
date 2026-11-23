@@ -28,8 +28,13 @@ export const CREDITS: Credit[] = [
   {
     name: 'HaGeZi DNS blocklists',
     url: 'https://github.com/hagezi/dns-blocklists',
-    role: 'Tracker and smart-TV lists (LG, Samsung, Amazon, Roku) that QuietNet uses to recognise domains.',
+    role: "Ad, tracker, smart-TV (LG, Samsung, Amazon, Roku) and threat lists behind QuietNet's block list, which turns known ads away on the first lookup.",
     license: 'GPL-3.0',
+  },
+  {
+    name: 'Tranco',
+    url: 'https://tranco-list.eu',
+    role: "A research ranking of the most visited sites. The top 10,000 that no list flags count as clean, so they never go to the AI.",
   },
   {
     name: 'DuckDuckGo Tracker Radar',

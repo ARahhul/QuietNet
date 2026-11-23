@@ -156,10 +156,10 @@ async def test_gemini_failure_falls_back(conn, ag, fake, user_id, add_device, li
 
     p = Pipeline(conn, lists, ClueFetcher(conn, online=False), Boom(), sync)
     add_device("rahhul-phone")
-    fake.record("rahhul-phone", "api.mixpanel.com")
+    fake.record("rahhul-phone", "news.example-news.in")  # on no list: only this one goes to the AI
     await p.process(await Poller(conn, ag, 30).poll_once())
-    m = _dom(conn, "mixpanel.com")
-    assert m["explained_by"] == "lists" and m["category"] in ("tracking", "ads")
+    m = _dom(conn, "example-news.in")
+    assert m["explained_by"] == "lists" and m["category"] == "unknown" and m["what_it_does"] == UNCONFIRMED_TEXT
     assert "RESOURCE_EXHAUSTED" in p.explainer.last_error
 
 
@@ -177,7 +177,70 @@ async def test_gemini_payload_contains_no_device_or_ip_data(conn, ag, fake, user
 
     p = Pipeline(conn, lists, ClueFetcher(conn, online=False), Spy(), sync)
     add_device("rahhul-secret-phone")
-    fake.record("rahhul-secret-phone", "api.mixpanel.com")
+    fake.record("rahhul-secret-phone", "news.example-news.in")
     await p.process(await Poller(conn, ag, 30).poll_once())
     blob = json.dumps(sent)
     assert sent and "rahhul" not in blob and "10.0.0." not in blob
+
+
+class CountingAI(Explainer):
+    """Pretends to be a working model and records every domain it was asked about."""
+
+    def __init__(self):
+        super().__init__("", "x")
+        self.client = object()
+        self.asked: list[str] = []
+
+    async def _call(self, batch):
+        self.asked.extend(c.domain for c in batch)
+        return {}
+
+
+async def test_only_unknown_domains_go_to_the_ai(conn, ag, fake, user_id, add_device, lists, sync):
+    ai = CountingAI()
+    p = Pipeline(conn, lists, ClueFetcher(conn, online=False), ai, sync)
+    add_device("rahhul-phone")
+    for q in [
+        "api.mixpanel.com",  # block list (HaGeZi Pro)
+        "googleads.g.doubleclick.net",  # every name it was looked up as is listed (g.doubleclick.net)
+        "api-global.netflix.com",  # must-allow
+        "www.wikipedia.org",  # one of the most visited sites, on no list
+        "news.example-news.in",  # unknown
+    ]:
+        fake.record("rahhul-phone", q)
+    await p.process(await Poller(conn, ag, 30).poll_once())
+    assert ai.asked == ["example-news.in"]
+    assert p.known_without_ai == 4
+
+    mix = _dom(conn, "mixpanel.com")
+    assert (mix["explained_by"], mix["category"], mix["confidence"]) == ("blocklist", "tracking", "high")
+    assert mix["owner"] == "Mixpanel, Inc." and json.loads(mix["sources"]) == ["HaGeZi Pro list"]
+    assert json.loads(mix["signals"])["blocklist"]
+    assert _dom(conn, "doubleclick.net")["explained_by"] == "blocklist"
+    assert _dom(conn, "api-global.netflix.com")["explained_by"] == "must_allow"
+    wiki = _dom(conn, "wikipedia.org")
+    assert (wiki["category"], wiki["explained_by"], wiki["sources"]) == ("needed", "clean_list", '["Tranco top sites"]')
+
+    # Seen again: answered from the cache, the AI isn't asked twice
+    fake.record("rahhul-phone", "news.example-news.in")
+    await p.process(await Poller(conn, ag, 30).poll_once())
+    assert ai.asked == ["example-news.in"]
+
+
+async def test_listed_domains_are_not_auto_blocked_twice(conn, ag, fake, user_id, add_device, lists, sync, tmp_path):
+    """AdGuard already blocks listed domains for everyone: Auto-mode adds no rule of its own for them."""
+    from pahra.blocklist import write_adguard_file
+
+    conn.execute("UPDATE users SET auto_mode = 1")
+    p = Pipeline(conn, lists, ClueFetcher(conn, online=False), Explainer("", "x"), sync)
+    sync.blocklist_file, sync.blocklist_digest = write_adguard_file(p.blocklist, tmp_path)
+    await sync.sync_blocklist()
+    phone = add_device("rahhul-phone")
+    fake.record("rahhul-phone", "api.mixpanel.com")
+    fake.record("rahhul-phone", "googleads.g.doubleclick.net")
+    await p.process(await Poller(conn, ag, 30).poll_once())
+    assert active_decision(conn, "mixpanel.com", phone) is None  # the list blocks it
+    assert fake.match("api.mixpanel.com", "rahhul-phone")[0]
+    # doubleclick.net as a whole isn't listed (only g.doubleclick.net), so Auto-mode still covers the rest of it
+    assert active_decision(conn, "doubleclick.net", phone)["decided_by"] == "auto"
+    assert conn.execute("SELECT COUNT(*) FROM alerts WHERE domain = 'mixpanel.com'").fetchone()[0] == 0

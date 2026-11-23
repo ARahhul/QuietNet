@@ -157,7 +157,7 @@ Each step is safe to re-run. It does the following:
 * turns on DoT and DoH with the wildcard certificate;
 * sets the upstream resolvers and the demo cache times (blocked answers 10 s, allowed answers at most 30 s);
 * keeps 24 h of query log;
-* limits the global lists to malware and phishing only;
+* limits the global lists to threat intelligence, plus QuietNet's own block list once the backend adds it;
 * **closes the resolver to strangers** until QuietNet adds your devices.
 
 ## 6. Connect the backend (5 min)
@@ -217,6 +217,8 @@ ssh -t -i $HOME\.ssh\quietnet_azure azureuser@<vm-ip> bash quietnet/infra/cloud-
 ```
 `cloud-up.sh` gets the wildcard certificate if missing, configures AdGuard (its login page stays hidden behind Caddy), rebuilds the engine, and checks the API and DoH.
 
+**QuietNet's block list.** The engine writes it to `agd-work/userfilters/quietnet-blocklist.txt` (the backend container sees that folder as `/blocklist`) and registers it with AdGuard as the filter list "QuietNet block list". AdGuard only opens local lists that match `filtering.safe_fs_patterns`; `cloud-up.sh` makes sure `/opt/adguardhome/work/userfilters/*` is on it. To use your own curated list, copy it to the VM, mount it into the backend and set `BLOCKLIST_CSV_PATH` in `backend.env`. **Settings → Ad & tracker list** shows whether AdGuard has it loaded.
+
 **Dashboard:** `frontend\.env.production` points the build at `https://api.<domain>`. If you change that address, change `connect-src` in the Content-Security-Policy in `firebase.json` too, or the dashboard can't reach the API. Build and deploy it:
 ```powershell
 cd frontend; npm run build; cd ..; npx firebase-tools deploy --only hosting
@@ -240,6 +242,7 @@ Don't run `scripts\dev.ps1 -Real` at the same time. Two engines would push rules
 | Cloud mode: the build stalls at `poetry install`, or blocklists never download | HTTPS from containers to Fastly (PyPI, GitHub raw) stalls on Azure. `vm-setup.sh` installs `quietnet-mss-clamp.service`, which fixes it. On an older VM run `bash ~/quietnet/infra/mss-clamp.sh` |
 | Cloud mode: `cloud-up.sh` fails only the `https://api.<domain>` check | The `api` A record is missing or not yet live. Caddy keeps retrying the certificate; re-run `cloud-up.sh` once `dig api.<domain>` shows the VM |
 | Cloud mode: the dashboard keeps asking for the token | The token was copied with a space, or `backend.env` was regenerated. Copy it again with the `grep` above |
+| Settings shows **Ad & tracker list** red, with "not loaded" or a path error | AdGuard can't read the file. Check `ls -l ~/quietnet/infra/agd-work/userfilters/` on the VM and that `safe_fs_patterns` in `agd-conf/AdGuardHome.yaml` lists `/opt/adguardhome/work/userfilters/*`, then re-run `cloud-up.sh`. The engine retries every 10 minutes by itself |
 | Settings shows the DNS gateway red | The tunnel is down. Look at the tunnel window, then check `curl.exe -u admin:<pw> http://127.0.0.1:3000/control/status` |
 
 ## How it's put together
@@ -261,6 +264,7 @@ Don't run `scripts\dev.ps1 -Real` at the same time. Two engines would push rules
 
 ## Gotchas
 
+* **One global list, block-only.** Besides threat intel, QuietNet's block list is the only list that applies to every home. It holds `||domain^` lines and nothing else (no `@@`, no modifiers), so it can't let anything through for anyone. Everything else is a `$client` rule of one home, and a home's own allow rule beats the list for that home only.
 * **The access list also gates DoT and DoH.** Once `allowed_clients` is non-empty, every device's ClientID must be on it. The backend keeps it up to date, so don't edit it by hand. The `pahra-closed` entry is a placeholder that matches no device.
 * **Unknown addresses (rescue mode, the default).** A home is recognised by its public IP, and providers like ACT hand out a new one on every reconnect. So the backend doesn't drop strangers: it empties `allowed_clients` and pushes a catch-all `||*^$client=~'<every device>'|...` that blocks everything for unknown clients, except `@@` rules for Dynamic DNS services, NTP and QuietNet's own domain. The router can then still update its Dynamic DNS name, the backend follows that name every minute (`DDNS_CHECK_S`) and re-links the home, and lookups fail at once instead of hanging. The catch-all is pushed before access opens, and access stays locked if AdGuard doesn't hold it. Set `ADGUARD_UNKNOWN_CLIENTS=drop` to go back to silent drops.
 * **CGNAT (JioFiber, Airtel, ACT).** Router DNS pointed at the VM can't identify your home. Use per-device DoT/DoH, the laptop relay for locked TVs, or a phone hotspot for the demo.

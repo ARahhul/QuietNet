@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
+import { DomainViewProvider } from './components/DomainView'
 import Layout from './components/Layout'
 import { ToastProvider } from './components/ui'
 import './index.css'
@@ -52,7 +53,13 @@ createRoot(document.getElementById('root')!).render(
             <Route path="welcome" element={<Landing />} />
             <Route path="login" element={<Login />} />
             <Route element={<RequireSession />}>
-              <Route element={<Layout />}>
+              <Route
+                element={
+                  <DomainViewProvider>
+                    <Layout />
+                  </DomainViewProvider>
+                }
+              >
                 <Route index element={<Suggestions />} />
                 <Route path="live" element={<Live />} />
                 <Route path="blocked" element={<Blocked />} />

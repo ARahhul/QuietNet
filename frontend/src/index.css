@@ -57,6 +57,16 @@
     }
   }
 
+  /* The View drawer: the panel slides in from the right over a quick scrim. */
+  --animate-drawer-in: drawer-in 350ms var(--ease-glide) both;
+  @keyframes drawer-in {
+    from {
+      transform: translateX(32px);
+      opacity: 0;
+    }
+  }
+  --animate-scrim-in: fade-in 200ms var(--ease-glide) both;
+
   /* A new row in the live log washes in, then settles. */
   --animate-row-in: row-in 1.6s var(--ease-glide);
   @keyframes row-in {

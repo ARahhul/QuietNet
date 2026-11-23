@@ -182,8 +182,9 @@ export interface SiteCandidate {
   category: Category
   why: string
   confidence: 'high' | 'medium' | 'low'
-  /** yours: your rule; auto: Auto-mode; held: a hold on a brand-new domain; list: the DNS server's block lists */
-  blocked_by: 'yours' | 'auto' | 'held' | 'list'
+  /** yours: your rule; auto: Auto-mode; held: a hold on a brand-new domain; blocklist: QuietNet's ad & tracker
+   * list (every home); list: another block list on the DNS server (threat intelligence) */
+  blocked_by: 'yours' | 'auto' | 'held' | 'blocklist' | 'list'
   devices: { id: string; name: string }[]
   times: number
   last_seen: string
@@ -266,8 +267,9 @@ export interface LiveQuery {
   qtype: string | null
   /** cached answers are allowed too; they just never left the server */
   status: 'blocked' | 'allowed' | 'cached'
-  /** rule: one of your QuietNet rules; list: a filter list on the DNS server */
-  blocked_by: 'rule' | 'list' | null
+  /** rule: one of your QuietNet rules; blocklist: QuietNet's ad & tracker list; list: another filter list on the
+   * DNS server (threat intelligence) */
+  blocked_by: 'rule' | 'blocklist' | 'list' | null
   upstream: string | null
   elapsed_ms: number | null
   category: Category
@@ -350,6 +352,7 @@ export interface Analytics {
     queries: number
     blocked: number
     blocked_by_rules: number
+    blocked_by_blocklist: number
     cached: number
     domains: number
     active_devices: number
@@ -379,6 +382,7 @@ export interface Alert {
   id: string
   type: string
   message: string
+  device_id: string | null
   device_name: string | null
   domain: string | null
   fix_steps: { title?: string; steps?: string[]; checked?: boolean }
@@ -400,7 +404,77 @@ export interface ActivityGroup {
     last_ts: string
     beacon: boolean
     decision: { id: string; action: string; household: boolean } | null
+    /** blocked for every home by QuietNet's ad & tracker list (an allow decision lets it through) */
+    blocklist: boolean
   }[]
+}
+
+/** Names QuietNet's ad & tracker list turned away for this home lately, grouped by domain. */
+export interface ListBlocked {
+  domain: string
+  /** the exact names looked up (what Unblock lets through) */
+  names: string[]
+  count: number
+  last_seen: string | null
+  devices: { id: string; name: string }[]
+  category: Category
+  owner: string | null
+  what_it_does: string | null
+  break_risk: 'low' | 'medium' | 'high' | null
+  sources: string[]
+  notes: string
+}
+
+export type ReasonKind = 'must_allow' | 'let_through' | 'held' | 'rule' | 'blocklist' | 'threat_list' | 'clean'
+
+/** One line of "why": a rule of this home's own, or a list the domain is on. */
+export interface DomainReason {
+  kind: ReasonKind
+  title: string
+  detail: string
+  sources?: string[]
+  notes?: string
+  category?: Category
+  owner?: string | null
+  /** the list is loaded in the DNS server (blocklist) */
+  active?: boolean
+  /** viewing a whole domain: the names looked up under it that the list covers (blocklist) */
+  names?: string[]
+  decision_id?: string
+  rule_domain?: string
+  decided_by?: string
+  created_at?: string
+  household?: boolean
+  device?: { id: string; name: string } | null
+  /** the rule covers the device in view (or the whole home) */
+  applies?: boolean
+}
+
+/** The View panel: what a domain is, why it is or isn't blocked here, and what this home looked up. */
+export interface DomainDetail {
+  name: string
+  domain: string
+  category: Category
+  owner: string | null
+  what_it_does: string | null
+  break_risk: 'low' | 'medium' | 'high' | null
+  break_note: string | null
+  confidence: 'high' | 'medium' | 'low' | null
+  sources: string[]
+  explained_by: string | null
+  /** QuietNet has seen and described it */
+  checked: boolean
+  acr: boolean
+  must_allow: boolean
+  status: 'blocked' | 'allowed'
+  blocked_by: 'let_through' | 'yours' | 'auto' | 'held' | 'blocklist' | 'threat_list' | null
+  reasons: DomainReason[]
+  /** `let_through`: an allow rule of this home's lets the name through now */
+  looked_up: { name: string; count: number; blocked: number; last_seen: string | null; let_through: boolean }[]
+  devices: { id: string; name: string; count: number; blocked: number; last_seen: string | null }[]
+  hours: number
+  /** unblock: names to let through (sites/unblock); undo_allow: allow rules to drop (undo-bulk); block: a rule to add */
+  actions: { unblock: string[] | null; undo_allow: string[] | null; block: string | null }
 }
 
 export interface Health {
@@ -408,6 +482,7 @@ export interface Health {
   poller: { last_poll: string | null; error: string | null; interval_s: number }
   sync: { dirty: boolean; last_ok: string | null; error: string | null }
   lists: { loaded_from: string; lists: Record<string, number>; tracker_radar_entries: number }
+  blocklist?: { active: boolean; source: string; blocked_in_adguard: number; clean: number; known_without_ai: number; error: string | null }
   llm: { enabled: boolean; model: string; error: string | null }
   domains_explained: number
   companion: { enabled: boolean; connected?: boolean; error?: string | null; tools?: string[] }
@@ -468,6 +543,10 @@ export const api = {
     req<{ count: number; restored: number }>('POST', '/decisions/undo-bulk', { ids, restore }),
   decisions: () => req<Decision[]>('GET', '/decisions'),
   blocked: () => req<BlockedDomain[]>('GET', '/blocked'),
+  blockedByList: (deviceId?: string | null, hours = 24) =>
+    req<{ active: boolean; hours: number; domains: ListBlocked[] }>('GET', `/blocked/by-list${qs({ device_id: deviceId, hours })}`),
+  domain: (name: string, deviceId?: string | null) =>
+    req<DomainDetail>('GET', `/domains/${encodeURIComponent(name)}${qs({ device_id: deviceId })}`),
   alerts: () => req<Alert[]>('GET', '/alerts'),
   readAlert: (id: string) => req<{ ok: boolean }>('POST', `/alerts/${id}/read`),
   report: () => req<Report>('GET', '/report/weekly'),

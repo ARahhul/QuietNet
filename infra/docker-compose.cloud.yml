@@ -31,10 +31,15 @@ services:
       # The companion (LAN scan, ADB, TV relay) has to run on a computer at home, not here.
       COMPANION_ENABLED: "false"
       API_DOCS: "false"            # don't publish a map of every endpoint
+      # QuietNet's ad & tracker block list: the backend writes it here, AdGuard reads the same file as a filter list
+      # (inside AdGuard's work/userfilters/, which its safe_fs_patterns allow)
+      ADGUARD_BLOCKLIST_DIR: /blocklist
+      ADGUARD_BLOCKLIST_PATH: /opt/adguardhome/work/userfilters/quietnet-blocklist.txt
     ports:
       - "127.0.0.1:8000:8000"      # localhost only, for debugging over SSH; the public path is Caddy
     volumes:
       - backend-data:/data
+      - ./agd-work/userfilters:/blocklist
     depends_on:
       - adguardhome
 

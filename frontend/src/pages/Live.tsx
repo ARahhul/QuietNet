@@ -1,9 +1,10 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { Home, Pause, Play, Search, X } from 'lucide-react'
+import { Eye, Home, Pause, Play, Search, X } from 'lucide-react'
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, type DeviceType, type LiveFilter, type LiveQuery, type NetworkClient } from '../api'
 import { DATA, fmt } from '../lib/viz'
+import { useDomainView } from '../components/DomainView'
 import { DeviceIcon, Empty, FilterChip, Roll, timeAgo } from '../components/ui'
 
 type Status = NonNullable<LiveFilter['status']>
@@ -17,13 +18,16 @@ const timeFmt = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2
 const isLocal = (ip: string) =>
   /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|169\.254\.|f[cd][0-9a-f]{2}:|fe80:)/i.test(ip)
 
-const RESULT: Record<string, { label: string; title: string; color: string }> = {
+/** `sub`: which list blocked it, on a second line so the column never truncates "Blocked" itself */
+const RESULT: Record<string, { label: string; sub?: string; title: string; color: string }> = {
   rule: { label: 'Blocked', title: 'Blocked by one of your QuietNet rules', color: DATA.blocked },
-  list: { label: 'Blocked by list', title: 'Blocked by a filter list on the DNS server', color: DATA.blocked },
+  blocklist: { label: 'Blocked', sub: 'Known ad/tracker', title: "Blocked for every home by QuietNet's ad & tracker list", color: DATA.blocked },
+  list: { label: 'Blocked', sub: 'Threat list', title: 'Blocked by a threat-intelligence list on the DNS server', color: DATA.blocked },
   cached: { label: 'From cache', title: 'Allowed, answered from the DNS server’s cache', color: DATA.cached },
   allowed: { label: 'Allowed', title: 'Allowed, answered by the upstream resolver', color: DATA.allowed },
 }
-const result = (r: LiveQuery) => RESULT[r.status === 'blocked' ? (r.blocked_by === 'list' ? 'list' : 'rule') : r.status]
+const result = (r: LiveQuery) =>
+  RESULT[r.status === 'blocked' ? (r.blocked_by === 'list' || r.blocked_by === 'blocklist' ? r.blocked_by : 'rule') : r.status]
 
 interface IpGroup {
   key: string
@@ -61,6 +65,7 @@ export default function Live() {
   const [paused, setPaused] = useState(false)
   const [reading, setReading] = useState(false)
   const [group, setGroup] = useState<Group>('device')
+  const view = useDomainView()
   const holding = paused || reading
 
   const set = (next: Record<string, string | undefined>) =>
@@ -304,9 +309,15 @@ export default function Live() {
                       </span>
                     </span>
                     <span className="order-1 min-w-0 md:order-none">
-                      <span className="block truncate font-mono text-[13px]" title={r.qname}>
-                        {r.qname}
-                      </span>
+                      <button
+                        type="button"
+                        className="group flex max-w-full items-center gap-1.5 text-left"
+                        title={`View ${r.qname}: what it is and why it was ${r.status === 'blocked' ? 'blocked' : 'allowed'}`}
+                        onClick={() => view(r.qname, r.device.id)}
+                      >
+                        <span className="truncate font-mono text-[13px] group-hover:underline">{r.qname}</span>
+                        <Eye className="h-3.5 w-3.5 shrink-0 text-muted/60 transition group-hover:text-white" aria-hidden="true" />
+                      </button>
                       {r.owner && <span className="block truncate text-xs text-muted">{r.owner}</span>}
                     </span>
                     <span className="hidden font-mono text-xs text-muted md:block">{r.qtype ?? ''}</span>
@@ -315,7 +326,10 @@ export default function Live() {
                       title={r.upstream && r.status === 'allowed' ? `${res.title} (${r.upstream})` : res.title}
                     >
                       <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: res.color }} />
-                      <span className="truncate">{res.label}</span>
+                      <span className="min-w-0">
+                        <span className="block truncate">{res.label}</span>
+                        {res.sub && <span className="block truncate text-[11px] text-muted">{res.sub}</span>}
+                      </span>
                     </span>
                     <span className="hidden text-right text-xs text-muted tabular-nums md:block">
                       {r.elapsed_ms !== null ? `${r.elapsed_ms < 1 ? '<1' : Math.round(r.elapsed_ms)} ms` : ''}

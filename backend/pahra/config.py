@@ -42,6 +42,16 @@ class Settings(BaseSettings):
     lists_cache_dir: str = ".cache/lists"
     # Use the small bundled sample lists instead of downloading (offline dev / tests)
     offline_lists: bool = False
+    # QuietNet's block list (pahra.blocklist): blocked by AdGuard for every home on the first lookup, no AI needed.
+    # The curated dataset (domain,category,owner,sources,source_count,notes). Empty or missing: built from the
+    # downloaded HaGeZi Pro and device lists.
+    blocklist_csv_path: str = ""
+    # Where QuietNet writes the list for AdGuard (empty: <lists_cache_dir>/adguard), and the same file's path as AdGuard
+    # sees it (empty: the same path, when both run on one machine). In the cloud they share agd-work/userfilters.
+    adguard_blocklist_dir: str = ""
+    adguard_blocklist_path: str = ""
+    # The most visited sites (Tranco) that no list flags count as clean and skip the AI. 0 turns it off.
+    tranco_top_n: int = 10000
 
     # Per-account rate limits (pahra.ratelimit). Off only for local scripts that hammer the API.
     rate_limit_enabled: bool = True
@@ -80,6 +90,10 @@ class Settings(BaseSettings):
         p = Path(self.lists_cache_dir)
         p.mkdir(parents=True, exist_ok=True)
         return p
+
+    @property
+    def blocklist_dir(self) -> Path:
+        return Path(self.adguard_blocklist_dir) if self.adguard_blocklist_dir else self.cache_dir / "adguard"
 
 
 @lru_cache

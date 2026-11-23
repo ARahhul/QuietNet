@@ -28,10 +28,21 @@ def is_must_allow(domain: str, device_type: str | None = None, qnames: tuple[str
     return any(p in allow for n in (domain, *qnames) for p in parents(n))
 
 
-def is_must_allow_any_device(domain: str) -> bool:
+@lru_cache
+def must_allow_all() -> frozenset[str]:
+    """Every must-allow entry, whatever the device type."""
     d = _yaml("must_allow.yaml")
-    allow = {x for v in d.values() for x in (v or [])}
+    return frozenset(x for v in d.values() for x in (v or []))
+
+
+def is_must_allow_any_device(domain: str) -> bool:
+    allow = must_allow_all()
     return any(p in allow for p in parents(domain))
+
+
+def seed_needed() -> dict[str, dict]:
+    """Seed entries that describe something a device or app needs (clean: never sent to AI)."""
+    return {k: v for k, v in _yaml("seed_domains.yaml").items() if (v or {}).get("category") == "needed"}
 
 
 def seed_verdict(domain: str) -> dict | None:

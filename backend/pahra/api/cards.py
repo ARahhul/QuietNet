@@ -47,7 +47,7 @@ async def _push(e: Engine) -> bool:
 
 @router.get("/suggestions")
 async def get_suggestions(device_id: str | None = None, e: Engine = Depends(engine)):
-    return suggestions(e.conn, e.user_id, device_id)
+    return suggestions(e.conn, e.user_id, device_id, e.blocklisted)
 
 
 @router.get("/decisions")
@@ -83,7 +83,7 @@ async def decide(body: DecisionIn, e: Engine = Depends(engine)):
 @router.post("/decisions/bulk", status_code=201)
 async def decide_bulk(body: BulkIn, e: Engine = Depends(engine)):
     """'Block all ads & trackers': one household rule per suggested domain (or per device if device_id given)."""
-    cards = suggestions(e.conn, e.user_id, body.device_id)
+    cards = suggestions(e.conn, e.user_id, body.device_id, e.blocklisted)
     limit = CONF_RANK[body.min_confidence]
     shown = set(body.domains) if body.domains is not None else None
     created = []

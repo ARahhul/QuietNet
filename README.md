@@ -33,7 +33,8 @@ Nothing to install on the devices, and no hardware at home.
 
 | | |
 |---|---|
-| **Explains every lookup** | Each tracker, ad network and telemetry domain becomes a card: who owns it, what it collects, how sure QuietNet is, and why. Lists, DuckDuckGo Tracker Radar, RDAP and an LLM are combined, and the LLM only ever sees the domain name |
+| **Blocks known ads on the first lookup** | QuietNet's ad & tracker list is loaded into AdGuard for every home, so a known ad, tracker or TV snooping domain is turned away the very first time it's looked up. Known domains are explained straight from the list, without the AI. **View** on any domain shows what it is and why it's blocked, and **Unblock** lets it through for your home or one device |
+| **Explains every lookup** | Each tracker, ad network and telemetry domain becomes a card: who owns it, what it collects, how sure QuietNet is, and why. Lists, DuckDuckGo Tracker Radar, RDAP and an LLM are combined. Only domains on no list go to the LLM, once each, and it only ever sees the domain name |
 | **Blocks per device** | Block all ads and trackers for the living-room TV without touching your phone. Every rule carries a `$client`, so devices are isolated from each other, and **Undo** is one click |
 | **Connects your TV for you** | The *Connect my TV* assistant scans the WiFi, fingerprints the TV, and sets Private DNS over ADB (Android TV, Google TV, Fire TV). For locked TVs (LG webOS, Samsung Tizen) it runs a DNS relay on your laptop, even behind CGNAT |
 | **Live lookups and a blocked list** | A Pi-hole style view of what every device is asking for, right now, and what QuietNet stopped |
@@ -54,7 +55,7 @@ flowchart LR
     end
 
     subgraph vm["Cloud VM"]
-        adguard["AdGuard Home<br/>per-device $client rules"]
+        adguard["AdGuard Home<br/>QuietNet block list (every home)<br/>+ per-device $client rules"]
     end
 
     subgraph engine["QuietNet engine"]
@@ -68,7 +69,7 @@ flowchart LR
     phone --> adguard
     tv --> adguard
     api -- "polls the query log" --> adguard
-    api -- "syncs rules" --> adguard
+    api -- "syncs rules and the block list" --> adguard
     api --- pipe
     api -- "stdio MCP" --> companion
     companion -. "scans and configures" .-> tv
@@ -76,9 +77,26 @@ flowchart LR
 ```
 
 1. **Resolve.** Each device gets its own address (`<client-id>.dns.<domain>`), so QuietNet always knows *which* device asked.
-2. **Classify.** The engine polls AdGuard's query log and runs each new domain through a pipeline: blocklists, seed data, tracker radar, RDAP, then an optional LLM for the explanation.
-3. **Decide.** You get a suggestion card, or turn on auto-mode. Decisions become AdGuard rules scoped to that one device.
-4. **Reverse.** Every decision can be undone, and rule sync is idempotent.
+2. **Block the known ones at once.** AdGuard holds QuietNet's block list as a filter list, so a listed ad or tracker gets NXDOMAIN on the first lookup, for every home.
+3. **Classify.** The engine polls AdGuard's query log and sorts each new domain into one of three buckets with an in-memory lookup (about a microsecond):
+
+   | Bucket | Comes from | What happens | AI? |
+   |---|---|---|---|
+   | **Blocked** | The curated `domains.csv` when you provide one; until then HaGeZi Pro and the smart-TV lists, plus threat intel | Already blocked by AdGuard. Described from the list: category, owner, sources, notes | No |
+   | **Clean** | Must-allow names, hand-checked seed data, Tracker Radar CDNs, sign-in and payments, the Tranco top 10,000 that no list flags, and `clean` rows in the CSV | Never blocked by QuietNet itself | No |
+   | **Unknown** | Everything else | Seed data, Tracker Radar and RDAP clues, then the optional LLM. The answer is cached, so each domain reaches the AI at most once | Once |
+4. **Decide.** Unknown domains become suggestion cards, or auto-mode blocks them. Decisions become AdGuard rules scoped to that one device.
+5. **Reverse.** Every decision can be undone, and rule sync is idempotent. Unblocking a listed name adds an allow rule for your home (or one device) that beats the list there and nowhere else.
+
+### Your own block list
+
+Point `BLOCKLIST_CSV_PATH` in `backend/.env` at a CSV with the header `domain,category,owner,sources,source_count,notes` and it replaces the downloaded lists:
+
+* `category` is `ads`, `tracking`, `telemetry`, `acr` (TV screen tracking) or `malware`/`phishing`; `clean` or `needed` rows go on the clean list.
+* `sources` is separated by `;` and `notes` shows in **View**. A note containing `CAUTION` marks the domain as one that may break something when blocked.
+* A leading `*.` is fine; a domain covers its subdomains either way.
+
+Must-allow names (time, updates, streaming) and their parent domains are always dropped from the list, so a row can't take a device offline. A new or edited CSV is picked up within a poll (30 s), the downloaded lists are refreshed daily, and AdGuard reloads the list whenever it changes.
 
 ### Repository layout
 
@@ -192,12 +210,12 @@ QuietNet is built around the idea that a tool that watches your DNS should be th
 **What reaches an AI model:**
 
 * **TV assistant:** device names, vendors and models. IP and MAC addresses are replaced with handles (`host-3`, `mac-1`), and the TV's QuietNet hostname and DoH URL are scrubbed first. DNS logs are never sent.
-* **Suggestion cards:** only the domain name and public clues (list hits, DuckDuckGo tracker data, RDAP), never which device made the query.
+* **Suggestion cards:** only the domain name and public clues (list hits, DuckDuckGo tracker data, RDAP), never which device made the query. Domains on QuietNet's block or clean list never reach a model at all.
 
 ## Tests
 
 ```powershell
-cd backend;   poetry run pytest -q     # 181 tests
+cd backend;   poetry run pytest -q     # 195 tests
 cd companion; poetry run pytest -q     # 276 tests
 cd frontend;  npm run lint; npm run build
 ```
@@ -233,7 +251,8 @@ QuietNet is the dashboard and the engine. The DNS that every device talks to run
 | [Cloudflare 1.1.1.1](https://1.1.1.1) and [Quad9](https://www.quad9.net) | Upstream resolvers, reached over TLS, for lookups that are allowed | Public services |
 | [Let's Encrypt](https://letsencrypt.org) and [Certbot](https://github.com/certbot/certbot) | The wildcard certificate behind each device's own DoT/DoH address, issued with the Cloudflare DNS plugin | Certbot: Apache-2.0 |
 | [Caddy](https://github.com/caddyserver/caddy) | Optional HTTPS front for DNS-over-HTTPS in `infra/docker-compose.harden.yml` | Apache-2.0 |
-| [HaGeZi DNS blocklists](https://github.com/hagezi/dns-blocklists) | Tracker and smart-TV lists used to recognise domains | GPL-3.0 |
+| [HaGeZi DNS blocklists](https://github.com/hagezi/dns-blocklists) | The ad, tracker, smart-TV and threat lists behind QuietNet's block list, until a curated `domains.csv` replaces them | GPL-3.0 |
+| [Tranco](https://tranco-list.eu) | A research ranking of the most visited sites: the top 10,000 that no list flags count as clean, so they never go to the AI | Research list |
 | [DuckDuckGo Tracker Radar](https://github.com/duckduckgo/tracker-radar) | Which company owns a tracking domain and what it collects | CC BY-NC-SA 4.0 |
 | [Inter and Inter Tight](https://rsms.me/inter/) | Dashboard typefaces by Rasmus Andersson | SIL OFL 1.1 |
 

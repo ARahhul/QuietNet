@@ -30,9 +30,9 @@ class AdGuardClient:
             raise AdGuardError(f"GET {path} -> {r.status_code}: {r.text[:200]}")
         return r.json() if r.content else None
 
-    async def _post(self, path: str, payload: Any) -> Any:
+    async def _post(self, path: str, payload: Any, timeout: float | None = None) -> Any:
         try:
-            r = await self._http.post(path, json=payload)
+            r = await self._http.post(path, json=payload, **({"timeout": timeout} if timeout else {}))
         except httpx.HTTPError as e:
             raise AdGuardError(f"AdGuard unreachable ({e.__class__.__name__}): is the SSH tunnel up?") from e
         if r.status_code >= 400:
@@ -59,6 +59,29 @@ class AdGuardClient:
 
     async def set_rules(self, rules: list[str]) -> None:
         await self._post("/control/filtering/set_rules", {"rules": rules})
+
+    # --- filter lists -----------------------------------------------------
+    async def filters(self) -> list[dict]:
+        st = await self._get("/control/filtering/status")
+        return list(st.get("filters") or [])
+
+    async def add_filter(self, name: str, url: str) -> None:
+        """`url` may be a path on AdGuard's own disk (it must match its `safe_fs_patterns`). AdGuard reads it now."""
+        await self._post("/control/filtering/add_url", {"name": name, "url": url, "whitelist": False}, timeout=120.0)
+
+    async def set_filter(self, url: str, name: str, enabled: bool = True) -> None:
+        await self._post(
+            "/control/filtering/set_url",
+            {"url": url, "whitelist": False, "data": {"name": name, "url": url, "enabled": enabled}},
+            timeout=120.0,
+        )
+
+    async def remove_filter(self, url: str) -> None:
+        await self._post("/control/filtering/remove_url", {"url": url, "whitelist": False})
+
+    async def refresh_filters(self) -> None:
+        """Re-read every block list now (AdGuard only reloads the ones whose content changed)."""
+        await self._post("/control/filtering/refresh", {"whitelist": False}, timeout=120.0)
 
     async def check_host(self, name: str, client: str | None = None) -> dict:
         return await self._get("/control/filtering/check_host", name=name, client=client)

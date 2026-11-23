@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Globe2, ShieldAlert, Tv, Wrench } from 'lucide-react'
 import { api } from '../api'
+import { ViewButton } from '../components/DomainView'
 import { Empty, Roll, timeAgo } from '../components/ui'
 
 const TITLE: Record<string, string> = {
@@ -51,10 +52,15 @@ export default function Alerts() {
                 )}
               </div>
             )}
-            {!a.read && (
-              <button className="btn-ghost mt-4 px-4 py-1.5 text-xs" onClick={() => read.mutate(a.id)}>
-                <Roll>Mark as done</Roll>
-              </button>
+            {(a.domain || !a.read) && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {a.domain && <ViewButton name={a.domain} deviceId={a.device_id} />}
+                {!a.read && (
+                  <button className="btn-ghost px-4 py-1.5 text-xs" onClick={() => read.mutate(a.id)}>
+                    <Roll>Mark as done</Roll>
+                  </button>
+                )}
+              </div>
             )}
           </article>
         ))}
