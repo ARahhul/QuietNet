@@ -100,7 +100,7 @@ export default function Layout() {
             </NavLink>
           </div>
         </header>
-        <main className="flex-1 px-4 pt-6 pb-28 md:px-10 md:pt-10 md:pb-12 2xl:px-14">
+        <main className="flex flex-1 flex-col px-4 pt-6 pb-28 md:px-10 md:pt-10 md:pb-12 2xl:px-14">
           <Outlet />
         </main>
       </div>
