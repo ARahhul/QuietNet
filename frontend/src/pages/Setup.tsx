@@ -36,7 +36,11 @@ const TV_BRANDS = [
   { brand: 'Amazon', label: 'Fire TV Stick', method: 'adb' },
 ]
 
-export default function Setup() {
+/**
+ * `first`: shown as the home page until one of the home's devices sends a lookup, so it leads with the steps and
+ * lists the devices already added; `onDone` leaves it once one is connected.
+ */
+export default function Setup({ first, onDone }: { first?: boolean; onDone?: () => void }) {
   const qc = useQueryClient()
   const [choice, setChoice] = useState<Choice | null>(null)
   const [tvBrand, setTvBrand] = useState<(typeof TV_BRANDS)[number] | null>(null)
@@ -73,19 +77,58 @@ export default function Setup() {
   const health = useQuery({ queryKey: ['health'], queryFn: api.health })
   const assistantReady = !!health.data?.companion.connected
   const aiReady = !!health.data?.llm.enabled
+  const added = useQuery({ queryKey: ['devices'], queryFn: api.devices, enabled: !!first, refetchInterval: 10000 })
 
   return (
     <div className="max-w-5xl">
-      <Link to="/devices" className="group inline-flex items-center gap-1 text-sm text-muted transition hover:text-white">
-        <ArrowLeft className="h-4 w-4 transition-transform motion-safe:group-hover:-translate-x-1" /> <span className="underline-slide">Devices</span>
-      </Link>
-      <h1 className="page-title mt-4">
-        Connect a <span className="text-guard">device</span>
-      </h1>
+      {first ? (
+        <h1 className="page-title">
+          Add your first <span className="text-guard">device</span>
+        </h1>
+      ) : (
+        <>
+          <Link to="/devices" className="group inline-flex items-center gap-1 text-sm text-muted transition hover:text-white">
+            <ArrowLeft className="h-4 w-4 transition-transform motion-safe:group-hover:-translate-x-1" /> <span className="underline-slide">Devices</span>
+          </Link>
+          <h1 className="page-title mt-4">
+            Connect a <span className="text-guard">device</span>
+          </h1>
+        </>
+      )}
 
       {!created && (
         <>
-          <p className="mt-2 text-sm text-muted">Pick what you want to protect. Each device gets its own private address.</p>
+          <p className="mt-2 max-w-2xl text-sm text-muted">
+            {first
+              ? 'QuietNet sees nothing until a device sends it its lookups. Pick what you want to protect to get its steps. It takes about a minute, no hardware needed.'
+              : 'Pick what you want to protect. Each device gets its own private address.'}
+          </p>
+
+          {first && !!added.data?.length && (
+            <div className="card mt-6 max-w-3xl p-4">
+              <div className="text-sm font-medium">Devices you’ve added</div>
+              <ul className="mt-2 divide-y divide-line">
+                {added.data.map((d) => (
+                  <li key={d.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 text-sm">
+                    <DeviceIcon type={d.type} className="h-4 w-4 shrink-0 text-brand-soft" />
+                    <span className="min-w-0 truncate">{d.name}</span>
+                    <span className={`text-xs ${d.last_seen ? 'text-guard' : 'text-muted'}`}>
+                      {d.last_seen ? 'sending lookups' : 'waiting for its first lookup'}
+                    </span>
+                    {d.last_seen ? (
+                      <button className="ml-auto text-guard" onClick={onDone}>
+                        <span className="underline-slide">See what it’s doing</span>
+                      </button>
+                    ) : (
+                      <Link to={`/devices/${d.id}`} className="ml-auto text-guard">
+                        <span className="underline-slide">Finish its steps</span>
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {CHOICES.map((c) => (
               <button
@@ -179,11 +222,16 @@ export default function Setup() {
                 {connected ? 'Its traffic now shows up in Suggestions.' : 'Follow the steps below; this turns green automatically.'}
               </div>
             </div>
-            {connected && (
-              <Link to="/" className="btn-primary ml-auto">
-                <Roll>See what it's doing</Roll>
-              </Link>
-            )}
+            {connected &&
+              (first ? (
+                <button className="btn-primary ml-auto" onClick={onDone}>
+                  <Roll>See what it's doing</Roll>
+                </button>
+              ) : (
+                <Link to="/" className="btn-primary ml-auto">
+                  <Roll>See what it's doing</Roll>
+                </Link>
+              ))}
           </div>
           <div className="card p-5">
             <SetupSteps deviceId={created.device.id} guide={created.setup} brand={created.device.brand} type={created.device.type} />
