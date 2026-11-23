@@ -6,9 +6,11 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..api.deps import current_user
+from ..api.limits import limit, limit_api
+from ..ratelimit import ASSISTANT_MESSAGE, ASSISTANT_START
 from .service import AssistantService
 
-router = APIRouter(prefix="/api", tags=["assistant"], dependencies=[Depends(current_user)])
+router = APIRouter(prefix="/api", tags=["assistant"], dependencies=[Depends(current_user), Depends(limit_api)])
 
 
 def service(request: Request) -> AssistantService:
@@ -36,7 +38,7 @@ async def companion_health(svc: AssistantService = Depends(service)):
     return svc.companion.status()
 
 
-@router.post("/assistant/sessions", status_code=201)
+@router.post("/assistant/sessions", status_code=201, dependencies=[Depends(limit("assistant_start", ASSISTANT_START))])
 async def start(body: StartIn, svc: AssistantService = Depends(service), user_id: str = Depends(current_user)):
     if not svc.companion.connected:
         raise HTTPException(503, svc.companion.error or "companion not connected")
@@ -80,7 +82,7 @@ async def events(sid: str, svc: AssistantService = Depends(service), user_id: st
     return {"session_id": s.id, "done": s.done, "events": s.events}
 
 
-@router.post("/assistant/sessions/{sid}/messages")
+@router.post("/assistant/sessions/{sid}/messages", dependencies=[Depends(limit("assistant_message", ASSISTANT_MESSAGE))])
 async def message(sid: str, body: MessageIn, svc: AssistantService = Depends(service), user_id: str = Depends(current_user)):
     s = _session(svc, sid, user_id)
     if s.done:

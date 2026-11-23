@@ -7,7 +7,9 @@ from pydantic import BaseModel, Field
 
 from .. import ad_hunt
 from ..engine import Engine
+from ..ratelimit import AD_HUNT
 from .deps import engine
+from .limits import limit
 from .devices import _get as get_device
 
 log = logging.getLogger("pahra.api.hunt")
@@ -21,7 +23,7 @@ class HuntIn(BaseModel):
     note: str = Field("", max_length=200)
 
 
-@router.post("/ads/hunt")
+@router.post("/ads/hunt", dependencies=[Depends(limit("ad_hunt", AD_HUNT))])
 async def hunt(body: HuntIn, e: Engine = Depends(engine)):
     """Find the names that most likely served ads the person just saw. Nothing is blocked here."""
     if not e.explainer.enabled:

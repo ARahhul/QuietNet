@@ -6,7 +6,9 @@ from pydantic import BaseModel, Field
 from .. import screen_help
 from ..db import get_meta
 from ..engine import Engine
+from ..ratelimit import SCREENSHOT
 from .deps import engine
+from .limits import limit
 from .devices import _get as get_device
 
 router = APIRouter(tags=["setup"])
@@ -29,7 +31,7 @@ class ScreenIn(BaseModel):
     history: list[Turn] = Field(default_factory=list, max_length=8)
 
 
-@router.post("/setup/screenshot")
+@router.post("/setup/screenshot", dependencies=[Depends(limit("screenshot", SCREENSHOT))])
 async def screenshot_help(body: ScreenIn, e: Engine = Depends(engine)):
     """Read a screenshot the person is stuck on and say what to do next. The picture isn't stored."""
     if not e.explainer.enabled:

@@ -167,3 +167,26 @@ def test_without_a_firebase_project_only_the_token_works(settings, fake_app):
         assert c.get("/api/devices", headers=bearer(token("uid-asha", "asha@example.com"))).status_code == 401
         assert c.get("/api/devices", headers=OPERATOR).status_code == 200
         assert c.get("/api/account", headers=OPERATOR).json()["signed_in_with"] == "token"
+
+
+def test_each_home_has_its_own_allowance(app):
+    """One home using up its AI lookups, or hammering the API, leaves every other home untouched."""
+    c, *_ = app
+    asha, ravi = bearer(token("uid-asha", "asha@example.com")), bearer(token("uid-ravi", "ravi@example.com"))
+    where = {"where": "Hotstar app"}
+
+    # The AI isn't set up in tests (503), but the allowance is counted before that: 6 a minute
+    assert [c.post("/api/ads/hunt", headers=asha, json=where).status_code for _ in range(6)] == [503] * 6
+    r = c.post("/api/ads/hunt", headers=asha, json=where)
+    assert r.status_code == 429 and int(r.headers["retry-after"]) > 0 and "Wait" in r.json()["detail"]
+
+    assert c.post("/api/ads/hunt", headers=ravi, json=where).status_code == 503  # Ravi's own count
+    assert c.get("/api/devices", headers=asha).status_code == 200  # a different bucket: the dashboard still works
+
+
+def test_wrong_tokens_from_one_address_are_slowed_down(app):
+    c, *_ = app
+    codes = [c.get("/api/devices", headers={"Authorization": "Bearer nope"}).status_code for _ in range(22)]
+    assert codes[:20] == [401] * 20 and codes[20:] == [429, 429]
+    # even the right token waits that address out for a moment
+    assert c.get("/api/devices", headers=OPERATOR).status_code == 429

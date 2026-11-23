@@ -4,6 +4,7 @@ from fastapi import Depends, HTTPException, Query, Request
 
 from ..auth import AuthError, account_for
 from ..engine import Engine
+from ..ratelimit import check_sign_in_attempts, note_bad_sign_in
 
 
 class AccountView:
@@ -38,6 +39,7 @@ async def current_user(request: Request, token: str | None = Query(default=None)
     if getattr(request.state, "user_id", None):
         return request.state.user_id
     e: Engine = request.app.state.engine
+    check_sign_in_attempts(request)  # an address that just sent many wrong tokens waits
     given = _given(request, token)
     if not given:
         raise HTTPException(status_code=401, detail="missing or invalid token")
@@ -47,10 +49,12 @@ async def current_user(request: Request, token: str | None = Query(default=None)
         try:
             claims = await e.auth.verify(given)
         except AuthError:
+            note_bad_sign_in(request)
             raise HTTPException(status_code=401, detail="missing or invalid token") from None
         request.state.claims = claims
         uid = account_for(e.conn, claims)
     else:
+        note_bad_sign_in(request)
         raise HTTPException(status_code=401, detail="missing or invalid token")
     request.state.user_id = uid
     return uid

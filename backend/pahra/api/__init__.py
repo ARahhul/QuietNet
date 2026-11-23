@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends
 
 from . import account, cards, devices, hunt, misc, providers, screen, traffic
 from .deps import current_user
+from .limits import limit_api
 
-router = APIRouter(prefix="/api", dependencies=[Depends(current_user)])
+router = APIRouter(prefix="/api", dependencies=[Depends(current_user), Depends(limit_api)])
 router.include_router(account.router)
 router.include_router(devices.router)
 router.include_router(cards.router)

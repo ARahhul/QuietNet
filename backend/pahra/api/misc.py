@@ -10,7 +10,9 @@ from ..db import rows_to_dicts
 from ..engine import Engine
 from ..queries import weekly_report
 from ..setup_guides import is_cgnat
+from ..ratelimit import POLL_NOW
 from .deps import engine
+from .limits import limit
 
 router = APIRouter(tags=["alerts, report, settings, system"])
 
@@ -85,7 +87,7 @@ async def health(e: Engine = Depends(engine)):
     }
 
 
-@router.post("/poll-now")
+@router.post("/poll-now", dependencies=[Depends(limit("poll_now", POLL_NOW))])
 async def poll_now(e: Engine = Depends(engine)):
     e.poller.poke()
     return {"ok": True}

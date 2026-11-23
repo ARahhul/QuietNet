@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     # Use the small bundled sample lists instead of downloading (offline dev / tests)
     offline_lists: bool = False
 
+    # Per-account rate limits (pahra.ratelimit). Off only for local scripts that hammer the API.
+    rate_limit_enabled: bool = True
+
     poll_interval_s: int = 30
     event_retention_days: int = 7
     query_log_hours: int = 24  # individual lookups kept for the live view and report charts

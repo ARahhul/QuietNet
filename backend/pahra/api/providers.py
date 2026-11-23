@@ -7,7 +7,9 @@ from pydantic import BaseModel, Field
 
 from .. import providers
 from ..engine import Engine
+from ..ratelimit import GUIDE
 from .deps import engine
+from .limits import limit
 from .misc import home_ip
 
 router = APIRouter(tags=["setup"])
@@ -32,7 +34,7 @@ class GuideIn(BaseModel):
     name: str = Field(min_length=1, max_length=60, pattern=r"\S")
 
 
-@router.post("/providers/guide")
+@router.post("/providers/guide", dependencies=[Depends(limit("guide", GUIDE))])
 async def provider_guide(body: GuideIn, e: Engine = Depends(engine)):
     """A guide for any provider or router: hand-checked, AI-written (cached), or generic."""
     return await providers.guide_for(e.conn, e.explainer, body.kind, body.name)

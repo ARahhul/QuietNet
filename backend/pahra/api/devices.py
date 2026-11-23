@@ -13,7 +13,9 @@ from ..db import get_meta, new_id, now_iso, row_to_dict
 from ..engine import Engine
 from ..queries import device_activity, devices_overview
 from ..setup_guides import CGNAT_NET, default_setup_method, mobileconfig, setup_guide
+from ..ratelimit import DEVICE_CHANGE
 from .deps import engine
+from .limits import limit
 from .misc import home_ip
 
 router = APIRouter(tags=["devices"])
@@ -67,7 +69,7 @@ async def _sync_after_device_change(e: Engine) -> bool:
         return False
 
 
-@router.post("/devices", status_code=201)
+@router.post("/devices", status_code=201, dependencies=[Depends(limit("device_change", DEVICE_CHANGE))])
 async def create_device(body: DeviceIn, e: Engine = Depends(engine)):
     cid = slug_client_id(e, body.name, body.client_id)
     did = new_id()
@@ -115,7 +117,7 @@ async def _follow_from_here(e: Engine, request: Request, raw: str) -> dict:
     return {"ddns_host": host, "linked_ip": here}
 
 
-@router.patch("/devices/{device_id}")
+@router.patch("/devices/{device_id}", dependencies=[Depends(limit("device_change", DEVICE_CHANGE))])
 async def patch_device(device_id: str, body: DevicePatch, request: Request, e: Engine = Depends(engine)):
     dev = _get(e, device_id)
     if body.linked_ip is not None and body.linked_ip != "":
@@ -158,7 +160,7 @@ async def patch_device(device_id: str, body: DevicePatch, request: Request, e: E
     return {"device": _with_follow(e, _get(e, device_id)), "synced": synced}
 
 
-@router.delete("/devices/{device_id}", status_code=204)
+@router.delete("/devices/{device_id}", status_code=204, dependencies=[Depends(limit("device_change", DEVICE_CHANGE))])
 async def delete_device(device_id: str, e: Engine = Depends(engine)):
     dev = _get(e, device_id)
     e.conn.execute("DELETE FROM devices WHERE id = ?", (dev["id"],))
