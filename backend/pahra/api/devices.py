@@ -89,13 +89,13 @@ def _with_follow(e: Engine, d: dict) -> dict:
 
 @router.get("/devices")
 async def list_devices(e: Engine = Depends(engine)):
-    return [_with_follow(e, d) for d in devices_overview(e.conn, e.user_id)]
+    return [_with_follow(e, d) for d in devices_overview(e.conn, e.user_id, e.blocklisted)]
 
 
 @router.get("/devices/{device_id}")
 async def get_device(device_id: str, e: Engine = Depends(engine)):
     _get(e, device_id)
-    return _with_follow(e, next(d for d in devices_overview(e.conn, e.user_id) if d["id"] == device_id))
+    return _with_follow(e, next(d for d in devices_overview(e.conn, e.user_id, e.blocklisted) if d["id"] == device_id))
 
 
 async def _follow_from_here(e: Engine, request: Request, raw: str) -> dict:
@@ -198,4 +198,4 @@ async def device_profile(device_id: str, e: Engine = Depends(engine)):
 @router.get("/devices/{device_id}/activity")
 async def activity(device_id: str, e: Engine = Depends(engine)):
     _get(e, device_id)
-    return device_activity(e.conn, e.user_id, device_id)
+    return device_activity(e.conn, e.user_id, device_id, e.blocklisted)

@@ -3,6 +3,7 @@ import { ArrowLeft, Radio, Trash2 } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import DoneCheck from '../components/DoneCheck'
+import { ViewButton } from '../components/DomainView'
 import HomeAddress from '../components/HomeAddress'
 import SetupSteps from '../components/SetupSteps'
 import { CategoryChip, DeviceIcon, Eyebrow, RiskBar, Roll, timeAgo, useToast } from '../components/ui'
@@ -86,11 +87,16 @@ export default function DeviceDetail() {
                     >
                       <Roll>{x.decision.action === 'allow' ? 'allowed' : x.decision.action === 'quarantine' ? 'held' : 'blocked'} · undo</Roll>
                     </button>
+                  ) : x.blocklist ? (
+                    <span className="chip bg-panel-2 text-muted" title="QuietNet's ad & tracker list blocks it for every home. View it to let it through here.">
+                      QuietNet list
+                    </span>
                   ) : x.category !== 'needed' ? (
                     <button className="btn-ghost px-2.5 py-1 text-xs" onClick={() => decide.mutate({ domain: x.domain, action: 'block' })}>
                       <Roll>block</Roll>
                     </button>
                   ) : null}
+                  <ViewButton name={x.domain} deviceId={id} variant="icon" />
                 </li>
               ))}
             </ul>

@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS domains (
     break_note    TEXT,
     confidence    TEXT NOT NULL,                 -- high | medium | low
     sources       TEXT NOT NULL DEFAULT '[]',    -- JSON list
-    explained_by  TEXT,                          -- gemini | lists | seed | must_allow
+    explained_by  TEXT,                          -- gemini | ai | lists | seed | must_allow | blocklist | threat_list | clean_list
     signals       TEXT NOT NULL DEFAULT '{}',    -- JSON: fast-check flags (patterns, dga, threat, beacon)
     first_seen    TEXT NOT NULL,
     explained_at  TEXT
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS queries (
     client_ip   TEXT,                            -- source address AdGuard saw
     proto       TEXT,                            -- dot | doh | dns | ...
     status      TEXT NOT NULL,                   -- blocked | cached | allowed
-    blocked_by  TEXT,                            -- rule (your QuietNet rules) | list (AdGuard filter lists)
+    blocked_by  TEXT,                            -- rule (your QuietNet rules) | blocklist (QuietNet block list) | list (other AdGuard filter lists: threat intel)
     upstream    TEXT,
     elapsed_ms  REAL
 );

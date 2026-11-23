@@ -39,7 +39,10 @@ c = yaml.safe_load(open(sys.argv[1]))
 tls, dns, http = c.get("tls") or {}, c.get("dns") or {}, c.get("http") or {}
 # AdGuard v0.108+/v1 (config schema 30+) keeps the switch under http.doh; older versions under tls
 doh_ok = http["doh"].get("insecure_enabled") is True if "doh" in http else tls.get("allow_unencrypted_doh") is True
-ok = tls.get("port_https") == 0 and doh_ok and "172.16.0.0/12" in (dns.get("trusted_proxies") or [])
+# QuietNet's block list is a local file AdGuard may only read from a safe path (v0.107.47+)
+fs = (c.get("filtering") or {}).get("safe_fs_patterns")
+fs_ok = fs is None or "/opt/adguardhome/work/userfilters/*" in fs
+ok = tls.get("port_https") == 0 and doh_ok and fs_ok and "172.16.0.0/12" in (dns.get("trusted_proxies") or [])
 print("no" if ok else "yes")
 PY
 )
@@ -59,10 +62,17 @@ else:
 proxies = c.setdefault("dns", {}).setdefault("trusted_proxies", ["127.0.0.0/8", "::1"])
 if "172.16.0.0/12" not in proxies:
     proxies.append("172.16.0.0/12")  # Docker's bridge networks
+fs = (c.get("filtering") or {}).get("safe_fs_patterns")
+if fs is not None and "/opt/adguardhome/work/userfilters/*" not in fs:
+    fs.append("/opt/adguardhome/work/userfilters/*")  # QuietNet's block list file
 yaml.safe_dump(c, open(path, "w"), sort_keys=False)
 PY
   sudo docker start pahra-dns-gateway >/dev/null
 fi
+
+# The backend (uid 10001) writes QuietNet's block list here; AdGuard loads it from work/userfilters/
+sudo mkdir -p agd-work/userfilters
+sudo chown 10001 agd-work/userfilters
 
 echo "==> Backend + Caddy (building the backend image)"
 "${COMPOSE[@]}" up -d --build --remove-orphans
@@ -88,7 +98,7 @@ check() {  # name, seconds, command...
 fail=0
 check "backend answers on 127.0.0.1:8000" 90 \
   curl -fsS -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8000/api/health || fail=1
-echo "$out" | python3 -c 'import json,sys; h=json.load(sys.stdin); print("         adguard:", h["adguard"], "| llm:", h["llm"]["enabled"])' 2>/dev/null || true
+echo "$out" | python3 -c 'import json,sys; h=json.load(sys.stdin); b=h.get("blocklist") or {}; print("         adguard:", h["adguard"], "| llm:", h["llm"]["enabled"], "| block list:", b.get("active"), b.get("blocked_in_adguard"), b.get("error") or "")' 2>/dev/null || true
 check "https://$API_HOST (Caddy's own certificate)" 120 \
   curl -fsS --resolve "$API_HOST:443:127.0.0.1" -H "Authorization: Bearer $TOKEN" "https://$API_HOST/api/health" || fail=1
 check "https://$DNS_HOST/ hides the AdGuard login (404)" 20 \

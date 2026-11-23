@@ -3,10 +3,13 @@
 import asyncio
 import logging
 import sqlite3
+from collections.abc import Iterable
+from pathlib import Path
 
 from .adguard.client import AdGuardClient, AdGuardError
 from .adguard.sync import AdGuardSync
 from .auth import FirebaseVerifier
+from .blocklist import BlocklistIndex, write_adguard_file
 from .config import Settings
 from .db import ensure_seed_user, init_sqlite_wal
 from . import home_address
@@ -45,7 +48,10 @@ class Engine:
             self.explainer = Explainer(
                 settings.gemini_api_key, settings.gemini_model, settings.gemini_batch_size, tracing=self.tracing
             )
-        self.pipeline = Pipeline(self.conn, self.lists, self.clues, self.explainer, self.sync)
+        # Built from the lists in start() and after every list refresh (a few seconds for the full lists).
+        self.blocklist = BlocklistIndex()
+        self._blocklist_fp: tuple | None = None
+        self.pipeline = Pipeline(self.conn, self.lists, self.clues, self.explainer, self.sync, self.blocklist)
         self.poller = Poller(
             self.conn, self.ag, settings.poll_interval_s, self._on_observed, self._on_tick, settings.query_log_hours
         )
@@ -58,12 +64,49 @@ class Engine:
     def _initial_lists(self) -> ListIndex:
         if self.settings.offline_lists:
             return ListIndex.sample()
-        idx = ListIndex.from_dir(self.settings.cache_dir, "cache")
+        idx = ListIndex.from_dir(self.settings.cache_dir, "cache", self.settings.tranco_top_n)
         return idx if idx.lists else ListIndex.sample()
 
     def set_lists(self, idx: ListIndex) -> None:
         self.lists = idx
         self.pipeline.lists = idx
+
+    def blocklisted(self, domain: str, qnames: Iterable[str] = ()) -> bool:
+        """AdGuard blocks this for every home through QuietNet's block list (unless a home let it through): the
+        domain is listed, or every name it was looked up as (`qnames`) is."""
+        if not self.sync.blocklist_active:
+            return False
+        e = self.blocklist.match(domain, qnames)
+        return e is not None and e.in_adguard
+
+    def _lists_fingerprint(self) -> tuple:
+        csv_path = Path(self.settings.blocklist_csv_path) if self.settings.blocklist_csv_path else None
+        csv_mtime = csv_path.stat().st_mtime if csv_path and csv_path.exists() else None
+        return (
+            self.lists.loaded_from,
+            tuple(sorted((k, len(v)) for k, v in self.lists.lists.items())),
+            len(self.lists.trackers),
+            len(self.lists.popular),
+            str(csv_path),
+            csv_mtime,
+        )
+
+    async def rebuild_blocklist(self) -> None:
+        """Build the block and clean lists, write AdGuard's copy, and have AdGuard load it (skipped when unchanged)."""
+        fp = self._lists_fingerprint()
+        if fp == self._blocklist_fp:
+            return
+        idx = await asyncio.to_thread(BlocklistIndex.build, self.lists, self.settings.blocklist_csv_path or None)
+        path, digest = await asyncio.to_thread(write_adguard_file, idx, self.settings.blocklist_dir)
+        self.blocklist = idx
+        self.pipeline.blocklist = idx
+        self.sync.blocklist_file, self.sync.blocklist_digest = path, digest
+        self._blocklist_fp = fp
+        log.info("block list ready: %s", idx.stats())
+        try:
+            await self.sync.sync_blocklist()
+        except AdGuardError:
+            pass  # logged; retried from the poller tick
 
     async def _on_observed(self, observed: list[Observed]) -> None:
         async with self._pipeline_lock:
@@ -75,6 +118,18 @@ class Engine:
                 await self.sync.sync_all()
             except AdGuardError:
                 pass
+        if self.sync.blocklist_due():
+            try:
+                await self.sync.sync_blocklist()
+            except AdGuardError:
+                pass
+        # A curated list dropped in or edited is picked up within a poll, not at the next daily list refresh
+        if self.settings.blocklist_csv_path and self._blocklist_fp is not None and self._lists_fingerprint() != self._blocklist_fp:
+            try:
+                async with self._pipeline_lock:
+                    await self.rebuild_blocklist()
+            except Exception:
+                log.exception("block list rebuild failed")
         try:
             async with self._pipeline_lock:
                 await self.pipeline.reexplain_with_ai()
@@ -84,9 +139,11 @@ class Engine:
     async def _refresh_lists(self) -> None:
         while True:
             try:
-                idx = await load_lists(self.settings.cache_dir, self.settings.offline_lists)
+                idx = await load_lists(self.settings.cache_dir, self.settings.offline_lists, self.settings.tranco_top_n)
                 self.set_lists(idx)
                 log.info("lists ready: %s", idx.stats())
+                async with self._pipeline_lock:
+                    await self.rebuild_blocklist()
             except Exception:
                 log.exception("list refresh failed")
             await asyncio.sleep(24 * 3600)
@@ -117,6 +174,10 @@ class Engine:
             await self.sync.sync_all()
         except AdGuardError as e:
             log.warning("AdGuard not reachable at startup (%s); will retry", e)
+        try:  # before the first poll, so known ads never wait for the AI
+            await self.rebuild_blocklist()
+        except Exception:
+            log.exception("building the block list failed")
         if background:
             self._tasks = [
                 asyncio.create_task(self.tracing.push_prompts(self.conn), name="langfuse-prompts"),

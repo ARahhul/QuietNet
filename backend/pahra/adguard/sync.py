@@ -15,7 +15,10 @@ import asyncio
 import json
 import logging
 import sqlite3
+import time
+from pathlib import Path
 
+from ..blocklist import FILTER_NAME
 from ..config import Settings
 from ..db import get_meta, now_iso, set_meta
 from .client import AdGuardClient, AdGuardError
@@ -52,6 +55,12 @@ class AdGuardSync:
         self.dirty = True
         self.last_ok: str | None = None
         self.last_error: str | None = None
+        # QuietNet's block list as an AdGuard filter (pahra.blocklist). The engine sets the file after each build.
+        self.blocklist_file: Path | None = None
+        self.blocklist_digest: str | None = None
+        self.blocklist_active = bool(get_meta(conn, "blocklist_filter_id"))  # AdGuard keeps filters across restarts
+        self.blocklist_error: str | None = None
+        self._blocklist_retry_at = 0.0
 
     # ------------------------------------------------------------------ rules
     def household_client_ids(self, user_id: str) -> list[str]:
@@ -125,6 +134,69 @@ class AdGuardSync:
             self.last_ok = now_iso()
             self.last_error = None
             return changed
+
+    # ------------------------------------------------------------- block list
+    BLOCKLIST_RETRY_S = 600
+
+    @property
+    def blocklist_url(self) -> str | None:
+        """The list file as AdGuard opens it: a path on AdGuard's own disk."""
+        if self.blocklist_file is None:
+            return None
+        return self.settings.adguard_blocklist_path or str(self.blocklist_file.resolve())
+
+    def blocklist_due(self) -> bool:
+        """A failed registration is retried every few minutes (not on every poll: AdGuard may refuse the path)."""
+        return self.blocklist_file is not None and self.blocklist_error is not None and time.monotonic() >= self._blocklist_retry_at
+
+    async def sync_blocklist(self) -> bool:
+        """Make AdGuard load QuietNet's block list, and reload it when its contents changed.
+
+        This is the one global layer QuietNet adds on purpose: the file only ever blocks (`||domain^` lines, built
+        without must-allow names), and every home's own `@@...$client` allow rules beat it, so it can't open anything
+        up for anyone, and each home can still let a site through for itself.
+        """
+        url = self.blocklist_url
+        if url is None:
+            return False
+        async with self._lock:
+            try:
+                filters = await self.ag.filters()
+                mine = next((f for f in filters if f.get("url") == url), None)
+                for f in filters:  # a copy left behind under an older path
+                    if f.get("name") == FILTER_NAME and f.get("url") != url:
+                        await self.ag.remove_filter(f["url"])
+                if mine is None:
+                    await self.ag.add_filter(FILTER_NAME, url)  # AdGuard reads the file now
+                    mine = next((f for f in await self.ag.filters() if f.get("url") == url), None)
+                    if mine is None:
+                        raise AdGuardError(f"AdGuard did not keep the block list filter {url}")
+                    set_meta(self.conn, "blocklist_digest", self.blocklist_digest or "")
+                elif not mine.get("enabled"):
+                    await self.ag.set_filter(url, FILTER_NAME, enabled=True)
+                if get_meta(self.conn, "blocklist_digest") != (self.blocklist_digest or ""):
+                    await self.ag.refresh_filters()
+                    set_meta(self.conn, "blocklist_digest", self.blocklist_digest or "")
+                    # the status read above is from before the reload: its rule count is the old file's
+                    mine = next((f for f in await self.ag.filters() if f.get("url") == url), mine)
+            except AdGuardError as e:
+                self.blocklist_error = str(e)
+                self._blocklist_retry_at = time.monotonic() + self.BLOCKLIST_RETRY_S
+                log.warning("could not load the block list into AdGuard (%s); retrying in %d s", e, self.BLOCKLIST_RETRY_S)
+                raise
+            set_meta(self.conn, "blocklist_filter_id", str(mine["id"]))
+            self.blocklist_active = True
+            self.blocklist_error = None
+            log.info("AdGuard has the block list (%s rules)", mine.get("rules_count", "?"))
+            return True
+
+    def blocklist_status(self) -> dict:
+        return {
+            "active": self.blocklist_active,
+            "path": self.blocklist_url,
+            "error": self.blocklist_error,
+            "filter_id": get_meta(self.conn, "blocklist_filter_id"),
+        }
 
     # ---------------------------------------------------------------- clients
     async def sync_clients(self) -> None:

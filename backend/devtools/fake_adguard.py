@@ -12,11 +12,14 @@ Then: ADGUARD_URL=http://127.0.0.1:3100
 import argparse
 import asyncio
 import random
+import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from fastapi import FastAPI, Query
+from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 
 # (fqdn, period seconds) — periods are jittered ±15 % except beacons
@@ -130,11 +133,26 @@ class State:
     dns: dict = field(default_factory=lambda: {"blocked_response_ttl": 10, "cache_ttl_max": 0})
     log: list[dict] = field(default_factory=list)  # newest first
     next_due: dict[tuple[str, str], datetime] = field(default_factory=dict)
+    # Block lists (filters). Like AdGuard, a filter's url may be a local file path; only `||domain^` lines are read.
+    filters: list[dict] = field(default_factory=list)
+    filter_domains: dict[int, set[str]] = field(default_factory=dict)
 
     def parsed(self) -> list[Rule]:
         return [r for r in (parse_rule(x) for x in self.rules) if r]
 
-    def match(self, qname: str, client: str) -> tuple[bool, list[str]]:
+    def load_filter(self, f: dict) -> None:
+        domains: set[str] = set()
+        path = Path(f["url"])
+        if path.exists():
+            for line in path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line.startswith("||") and line.endswith("^") and "$" not in line:
+                    domains.add(line[2:-1].lower())
+        self.filter_domains[f["id"]] = domains
+        f["rules_count"] = len(domains)
+
+    def match_detail(self, qname: str, client: str) -> tuple[bool, list[tuple[str, int]]]:
+        """(blocked, [(rule text, filter_list_id)]). Custom rules are filter 0; an allow rule beats every block."""
         q = qname.lower().strip(".")
         hits_block, hits_allow = [], []
         for r in self.parsed():
@@ -144,10 +162,22 @@ class State:
                 continue
             if client in r.exclude:
                 continue
-            (hits_allow if r.allow else hits_block).append(r.raw)
+            (hits_allow if r.allow else hits_block).append((r.raw, 0))
         if hits_allow:
             return False, hits_allow
+        labels = q.split(".")
+        names = [".".join(labels[i:]) for i in range(len(labels))]
+        for f in self.filters:
+            if not f.get("enabled"):
+                continue
+            hit = next((n for n in names if n in self.filter_domains.get(f["id"], ())), None)
+            if hit:
+                hits_block.append((f"||{hit}^", f["id"]))
         return bool(hits_block), hits_block
+
+    def match(self, qname: str, client: str) -> tuple[bool, list[str]]:
+        blocked, hits = self.match_detail(qname, client)
+        return blocked, [text for text, _ in hits]
 
     def record(
         self,
@@ -160,7 +190,7 @@ class State:
         elapsed_ms: float = 1.8,
     ) -> dict:
         when = when or datetime.now(timezone.utc)
-        blocked, rules = self.match(qname, client)
+        blocked, rules = self.match_detail(qname, client)
         cached = cached and not blocked
         entry = {
             "answer": [] if blocked else [{"type": qtype, "value": "203.0.113.%d" % random.randint(1, 254), "ttl": 30}],
@@ -172,7 +202,7 @@ class State:
             "elapsedMs": str(round(0.1 if cached else elapsed_ms, 2)),
             "question": {"class": "IN", "name": qname, "type": qtype},
             "reason": "FilteredBlackList" if blocked else "NotFilteredNotFound",
-            "rules": [{"filter_list_id": 0, "text": r} for r in rules],
+            "rules": [{"filter_list_id": fid, "text": r} for r, fid in rules],
             "status": "NXDOMAIN" if blocked else "NOERROR",
             "time": _ag_time(when),
             "upstream": "" if blocked or cached else upstream,
@@ -237,7 +267,38 @@ def create_app(seed_clients: list[str] | None = None, generate: bool = True) -> 
 
     @app.get("/control/filtering/status")
     async def filtering_status():
-        return {"enabled": True, "interval": 24, "filters": [], "whitelist_filters": [], "user_rules": state.rules}
+        return {"enabled": True, "interval": 24, "filters": state.filters, "whitelist_filters": [], "user_rules": state.rules}
+
+    @app.post("/control/filtering/add_url")
+    async def add_url(body: dict):
+        if any(f["url"] == body["url"] for f in state.filters):
+            return JSONResponse({"message": "Filter URL already added"}, status_code=400)
+        if not Path(body["url"]).exists():
+            return JSONResponse({"message": f"Couldn't fetch filter from URL {body['url']}"}, status_code=400)
+        f = {"id": int(time.time() * 1000) + len(state.filters), "name": body.get("name") or body["url"],
+             "url": body["url"], "enabled": True, "rules_count": 0, "last_updated": _ag_time(datetime.now(timezone.utc))}
+        state.load_filter(f)
+        state.filters.append(f)
+        return PlainTextResponse(f"OK 1 filters added with {f['rules_count']} rules")
+
+    @app.post("/control/filtering/set_url")
+    async def set_url(body: dict):
+        for f in state.filters:
+            if f["url"] == body["url"]:
+                f.update({k: v for k, v in (body.get("data") or {}).items() if k in ("name", "url", "enabled")})
+                state.load_filter(f)
+        return {}
+
+    @app.post("/control/filtering/remove_url")
+    async def remove_url(body: dict):
+        state.filters = [f for f in state.filters if f["url"] != body["url"]]
+        return {}
+
+    @app.post("/control/filtering/refresh")
+    async def refresh(body: dict):
+        for f in state.filters:
+            state.load_filter(f)
+        return {"updated": len(state.filters)}
 
     class Rules(BaseModel):
         rules: list[str]
@@ -249,9 +310,9 @@ def create_app(seed_clients: list[str] | None = None, generate: bool = True) -> 
 
     @app.get("/control/filtering/check_host")
     async def check_host(name: str, client: str = ""):
-        blocked, rules = state.match(name, client)
+        blocked, rules = state.match_detail(name, client)
         return {"reason": "FilteredBlackList" if blocked else "NotFilteredNotFound",
-                "rules": [{"text": r, "filter_list_id": 0} for r in rules]}
+                "rules": [{"text": r, "filter_list_id": fid} for r, fid in rules]}
 
     @app.get("/control/clients")
     async def clients():

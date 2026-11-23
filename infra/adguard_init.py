@@ -9,8 +9,9 @@ Steps (each is idempotent):
   2. enable encryption: DoH :443 and DoT :853 with the Let's Encrypt wildcard cert
   3. upstreams (Cloudflare + Quad9 over TLS), demo TTLs (blocked 10 s, max cache 30 s)
   4. query log kept 24 h (QuietNet polls it every 30 s)
-  5. global filter lists = malware/phishing only. Ad/tracker blocking is per-device via $client rules,
-     otherwise ads would already be gone before "Block all ads" on stage.
+  5. global filter lists = threat intel, plus QuietNet's own block list once the backend has added it
+     (known ads and trackers, a local file under work/userfilters/, block-only). Any other list goes:
+     everything else a home blocks or lets through is a $client rule of its own.
   6. close the resolver: an empty access list means "answer everyone" (an open resolver that gets
      abused for DDoS amplification). A placeholder entry keeps it closed until the backend adds devices.
 """
@@ -25,6 +26,7 @@ import urllib.error
 import urllib.request
 
 TIF = "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/tif.mini.txt"
+QUIETNET_LIST = "QuietNet block list"  # added and kept current by the backend (pahra.adguard.sync.sync_blocklist)
 CLOSED = "pahra-closed"  # matches no device; the backend keeps operator entries and adds device ClientIDs
 
 
@@ -122,16 +124,16 @@ def main() -> None:
             {"enabled": True, "interval": 24 * 3600 * 1000, "anonymize_client_ip": False, "ignored": []})
     print("==> query log retention 24 h")
 
-    # 5. global filters: threat intel only
+    # 5. global filters: threat intel, and QuietNet's own block list (the backend loads that one)
     st = ag.call("GET", "/control/filtering/status")
     for f in st.get("filters") or []:
-        if f["url"] != TIF:
+        if f["url"] != TIF and f.get("name") != QUIETNET_LIST:
             ag.call("POST", "/control/filtering/remove_url", {"url": f["url"], "whitelist": False})
             print("   removed global list:", f["name"])
     if not any(f["url"] == TIF for f in st.get("filters") or []):
         ag.call("POST", "/control/filtering/add_url", {"name": "HaGeZi Threat Intelligence (mini)", "url": TIF, "whitelist": False})
     ag.call("POST", "/control/filtering/config", {"enabled": True, "interval": 12})
-    print("==> global filtering = threat intel only (ads/trackers are per-device $client rules)")
+    print("==> global filtering = threat intel + QuietNet's block list (each home's own rules are $client rules)")
 
     # 6. never run as an open resolver
     acl = ag.call("GET", "/control/access/list")

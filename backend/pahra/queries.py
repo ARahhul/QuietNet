@@ -3,6 +3,7 @@
 import json
 import sqlite3
 from collections import defaultdict
+from collections.abc import Callable, Collection, Iterable
 from datetime import datetime, timedelta, timezone
 
 from .events import is_beacon
@@ -11,6 +12,44 @@ from .timeutil import parse_iso, to_iso
 
 CARD_CATEGORIES = {"malware", "tracking", "telemetry", "ads"}
 CONF_RANK = {"high": 0, "medium": 1, "low": 2}
+
+# QuietNet's block list (Engine.blocklisted): is the domain blocked for every home, given the names it was looked up as
+Blocklisted = Callable[[str, Iterable[str]], bool]
+
+
+def on_list(conn: sqlite3.Connection, rows: list[dict], blocklisted: Blocklisted | None) -> set[tuple[str, str]]:
+    """The (device, domain) pairs QuietNet's block list already blocks: the domain itself is listed, or every name the
+    device looked up under it lately is (in.appcenter.ms listed doesn't put all of appcenter.ms on the list).
+
+    Only domains the pipeline described from the list can be covered name by name, so only those cost a lookup in
+    `queries`; with no recent lookups to go by, the pair counts as not covered.
+    """
+    if blocklisted is None:
+        return set()
+    out: set[tuple[str, str]] = set()
+    rest: list[dict] = []
+    for r in rows:
+        if blocklisted(r["domain"], ()):
+            out.add((r["device_id"], r["domain"]))
+        elif r.get("explained_by") == "blocklist":
+            rest.append(r)
+    if not rest:
+        return out
+    devices = sorted({r["device_id"] for r in rest})
+    domains = sorted({r["domain"] for r in rest})
+    names: dict[tuple[str, str], list[str]] = defaultdict(list)
+    for q in conn.execute(
+        f"SELECT DISTINCT device_id, domain, qname FROM queries WHERE device_id IN ({','.join('?' * len(devices))}) "
+        f"AND domain IN ({','.join('?' * len(domains))})",
+        (*devices, *domains),
+    ):
+        names[(q["device_id"], q["domain"])].append(q["qname"])
+    for r in rest:
+        key = (r["device_id"], r["domain"])
+        # the domain itself isn't listed (checked above), so a lookup of it got through
+        if names[key] and r["domain"] not in names[key] and blocklisted(r["domain"], names[key]):
+            out.add(key)
+    return out
 
 
 def _decision_index(conn: sqlite3.Connection, user_id: str) -> tuple[dict, dict]:
@@ -64,9 +103,13 @@ def _category_rank(cat: str, acr: bool) -> float:
     return {"tracking": 1, "telemetry": 1, "ads": 2, "unknown": 3}.get(cat, 4)
 
 
-def suggestions(conn: sqlite3.Connection, user_id: str, device_id: str | None = None) -> list[dict]:
+def suggestions(
+    conn: sqlite3.Connection, user_id: str, device_id: str | None = None, blocklisted: Blocklisted | None = None
+) -> list[dict]:
+    """Cards for what's left to decide. What QuietNet's block list already blocks for every home isn't a card
+    (`blocklisted`, see on_list); it shows on the Blocked page instead."""
     per_device, household = _decision_index(conn, user_id)
-    cards: dict[str, dict] = {}
+    open_rows: list[tuple[dict, dict | None]] = []
     for r in _rows(conn, user_id, device_id):
         cat = r["category"]
         sig = r["signals"]
@@ -78,6 +121,14 @@ def suggestions(conn: sqlite3.Connection, user_id: str, device_id: str | None = 
         dec = effective_decision(per_device, household, r["device_id"], r["domain"])
         if dec and dec["action"] in ("block", "allow"):
             continue
+        open_rows.append((r, dec))
+    listed = on_list(conn, [r for r, _ in open_rows], blocklisted)
+    cards: dict[str, dict] = {}
+    for r, dec in open_rows:
+        if (r["device_id"], r["domain"]) in listed:
+            continue
+        cat = r["category"]
+        sig = r["signals"]
         card = cards.setdefault(
             r["domain"],
             {
@@ -117,11 +168,15 @@ def suggestions(conn: sqlite3.Connection, user_id: str, device_id: str | None = 
     return out
 
 
-def device_risk(rows: list[dict], per_device: dict, household: dict) -> int:
+def device_risk(rows: list[dict], per_device: dict, household: dict, listed: Collection[tuple[str, str]] = frozenset()) -> int:
+    """`listed`: the (device, domain) pairs QuietNet's block list already blocks (on_list)."""
     score = 0.0
     for r in rows:
         dec = effective_decision(per_device, household, r["device_id"], r["domain"])
-        blocked = bool(dec and dec["action"] in ("block", "quarantine"))
+        if dec and dec["action"] == "allow":
+            blocked = False
+        else:
+            blocked = bool(dec and dec["action"] in ("block", "quarantine")) or (r["device_id"], r["domain"]) in listed
         cat = r["category"]
         if cat == "malware":
             score += 5 if blocked else 30
@@ -134,17 +189,19 @@ def device_risk(rows: list[dict], per_device: dict, household: dict) -> int:
     return min(100, round(score))
 
 
-def devices_overview(conn: sqlite3.Connection, user_id: str) -> list[dict]:
+def devices_overview(conn: sqlite3.Connection, user_id: str, blocklisted: Blocklisted | None = None) -> list[dict]:
     per_device, household = _decision_index(conn, user_id)
     rows_by_dev: dict[str, list[dict]] = defaultdict(list)
-    for r in _rows(conn, user_id):
+    all_rows = _rows(conn, user_id)
+    for r in all_rows:
         rows_by_dev[r["device_id"]].append(r)
+    listed = on_list(conn, all_rows, blocklisted)
     online_cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
     out = []
     for d in conn.execute("SELECT * FROM devices WHERE user_id = ? ORDER BY created_at", (user_id,)):
         dev = dict(d)
         rows = rows_by_dev.get(dev["id"], [])
-        dev["risk_score"] = device_risk(rows, per_device, household)
+        dev["risk_score"] = device_risk(rows, per_device, household, listed)
         dev["stats"] = {
             "domains": len(rows),
             "queries": sum(r["count"] for r in rows),
@@ -157,10 +214,12 @@ def devices_overview(conn: sqlite3.Connection, user_id: str) -> list[dict]:
     return out
 
 
-def device_activity(conn: sqlite3.Connection, user_id: str, device_id: str) -> list[dict]:
+def device_activity(conn: sqlite3.Connection, user_id: str, device_id: str, blocklisted: Blocklisted | None = None) -> list[dict]:
     per_device, household = _decision_index(conn, user_id)
     groups: dict[str, dict] = {}
-    for r in _rows(conn, user_id, device_id):
+    rows = _rows(conn, user_id, device_id)
+    listed = on_list(conn, rows, blocklisted)
+    for r in rows:
         owner = r["owner"] or "Unknown company"
         g = groups.setdefault(owner, {"owner": owner, "count": 0, "domains": []})
         dec = effective_decision(per_device, household, device_id, r["domain"])
@@ -176,6 +235,8 @@ def device_activity(conn: sqlite3.Connection, user_id: str, device_id: str) -> l
                 "last_ts": r["last_ts"],
                 "beacon": is_beacon(r),
                 "decision": {"id": dec["id"], "action": dec["action"], "household": dec["device_id"] is None} if dec else None,
+                # blocked for every home by QuietNet's block list (an allow decision above lets it through)
+                "blocklist": (device_id, r["domain"]) in listed,
             }
         )
     out = sorted(groups.values(), key=lambda g: -g["count"])

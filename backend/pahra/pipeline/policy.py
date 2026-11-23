@@ -23,8 +23,19 @@ def _domain(conn: sqlite3.Connection, domain: str) -> dict | None:
     return row_to_dict(conn.execute("SELECT * FROM domains WHERE domain = ?", (domain,)).fetchone(), ("sources", "signals"))
 
 
-def apply_policy(conn: sqlite3.Connection, device_id: str, domain: str, qnames: tuple[str, ...] = (), max_gap_s: float = 0.0) -> bool:
-    """Returns True when a decision changed (caller re-syncs AdGuard)."""
+def apply_policy(
+    conn: sqlite3.Connection,
+    device_id: str,
+    domain: str,
+    qnames: tuple[str, ...] = (),
+    max_gap_s: float = 0.0,
+    blocklisted: bool = False,
+) -> bool:
+    """Returns True when a decision changed (caller re-syncs AdGuard).
+
+    `blocklisted`: AdGuard already blocks the domain for every home through QuietNet's block list, so no rule of
+    this home's own is needed for it.
+    """
     dev = _device(conn, device_id)
     dom = _domain(conn, domain)
     if not dev or not dom:
@@ -76,6 +87,7 @@ def apply_policy(conn: sqlite3.Connection, device_id: str, domain: str, qnames: 
         and dom["break_risk"] == "low"
         and (mine is None or mine["action"] == "quarantine")
         and household is None
+        and not blocklisted
     ):
         create_decision(conn, dev["user_id"], domain, "block", device_id=device_id, decided_by="auto")
         changed = True
@@ -88,7 +100,15 @@ def apply_policy(conn: sqlite3.Connection, device_id: str, domain: str, qnames: 
     if sig.get("acr") and dev["type"] == "tv":
         who = dom["owner"] or domain
         brand = dev.get("brand") or "smart"
-        if max_gap_s >= QUIET_RETURN_S:
+        if blocklisted and not let_through:
+            back = f" after {int(max_gap_s // 86400)} quiet days" if max_gap_s >= QUIET_RETURN_S else ""
+            create_alert(
+                conn, user_id=dev["user_id"], device=dev, type_="acr_tracker", domain=domain, acr=True,
+                force=bool(back),
+                message=f"Your {brand} TV is trying to share what you watch with {who}{back}. QuietNet blocks it; "
+                "switch it off on the TV too so it stops trying.",
+            )
+        elif max_gap_s >= QUIET_RETURN_S:
             create_alert(
                 conn, user_id=dev["user_id"], device=dev, type_="acr_tracker", domain=domain, acr=True, force=True,
                 message=f"{who} is back on your {brand} TV after {int(max_gap_s // 86400)} quiet days. "

@@ -36,7 +36,10 @@ MAX_BLOCKED = 80  # blocked names shown to the model
 MAX_ANSWERED = 40  # names that worked, for context
 MAX_CANDIDATES = 8
 RISKY = {"ads", "tracking", "telemetry", "malware"}
-LABEL = {"yours": "your rule", "auto": "Auto-mode", "held": "held as new", "list": "a block list"}
+LABEL = {
+    "yours": "your rule", "auto": "Auto-mode", "held": "held as new",
+    "blocklist": "QuietNet's ad & tracker list", "list": "a block list",
+}
 WARNING = {
     "malware": "It's on a malware list. Unblock it only if you trust this site.",
     "ads": "Usually an ad name. Unblock it only if the site still breaks without it.",
@@ -94,7 +97,8 @@ def blocked_names(conn: sqlite3.Connection, user_id: str, since: float, device_i
     that were blocked then but have been let through since."""
     sql = (
         "SELECT q.qname, q.device_id, v.name AS device_name, COUNT(*) AS n, MAX(q.t) AS last, "
-        "SUM(IFNULL(q.blocked_by, 'list') = 'list') AS by_list, d.category, d.owner "
+        "SUM(IFNULL(q.blocked_by, 'list') IN ('list', 'blocklist')) AS by_list, "
+        "SUM(q.blocked_by = 'blocklist') AS by_blocklist, d.category, d.owner "
         "FROM queries q JOIN devices v ON v.id = q.device_id LEFT JOIN domains d ON d.domain = q.domain "
         "WHERE v.user_id = ? AND q.t >= ? AND q.status = 'blocked'"
     )
@@ -112,7 +116,8 @@ def blocked_names(conn: sqlite3.Connection, user_id: str, since: float, device_i
         if state == "none" and not r["by_list"]:
             state = "allowed"  # only QuietNet's rule ever blocked it, and that rule is gone
         e = by_name.setdefault(
-            name, {"qname": name, "owner": r["owner"], "category": r["category"], "n": 0, "last": 0.0, "devices": [], "rule": None, "open": False}
+            name, {"qname": name, "owner": r["owner"], "category": r["category"], "n": 0, "last": 0.0, "devices": [], "rule": None,
+                   "open": False, "ours": False}
         )
         if state == "allowed":
             continue
@@ -120,6 +125,7 @@ def blocked_names(conn: sqlite3.Connection, user_id: str, since: float, device_i
         e["n"] += r["n"]
         e["last"] = max(e["last"], r["last"])
         e["devices"].append({"id": r["device_id"], "name": r["device_name"]})
+        e["ours"] = e["ours"] or bool(r["by_blocklist"])
         if rule and not e["rule"]:
             e["rule"] = rule
     still, since_let = [], []
@@ -128,7 +134,11 @@ def blocked_names(conn: sqlite3.Connection, user_id: str, since: float, device_i
             since_let.append(e["qname"])
             continue
         rule = e["rule"]
-        e["blocked_by"] = ("held" if rule["action"] == "quarantine" else "auto" if rule["decided_by"] == "auto" else "yours") if rule else "list"
+        ours = e.pop("ours")
+        e["blocked_by"] = (
+            ("held" if rule["action"] == "quarantine" else "auto" if rule["decided_by"] == "auto" else "yours")
+            if rule else "blocklist" if ours else "list"
+        )
         still.append(e)
     return still, sorted(since_let)
 

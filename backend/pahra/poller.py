@@ -137,6 +137,7 @@ class Poller:
             return []
 
         by_cid, by_ip = self._device_maps()
+        blocklist_id = get_meta(self.conn, "blocklist_filter_id")
         observed: dict[tuple[str, str], Observed] = {}
         last_seen: dict[str, datetime] = {}
         entries.reverse()  # AdGuard lists newest first; reversing keeps arrival order for equal timestamps
@@ -152,7 +153,7 @@ class Poller:
             domain = normalize_domain(qname)
             blocked = str(e.get("reason", "")).startswith("Filtered")
             gap = ingest_event(self.conn, dev, domain, e["_t"], blocked)
-            log_query(self.conn, dev, qname, domain, e, blocked)
+            log_query(self.conn, dev, qname, domain, e, blocked, blocklist_id)
             ob = observed.setdefault((dev, domain), Observed(dev, domain))
             ob.qnames.add(qname)
             ob.is_new = ob.is_new or gap is None
@@ -167,13 +168,21 @@ class Poller:
         return list(observed.values())
 
 
-def log_query(conn: sqlite3.Connection, device_id: str, qname: str, domain: str, e: dict, blocked: bool) -> None:
+def log_query(
+    conn: sqlite3.Connection, device_id: str, qname: str, domain: str, e: dict, blocked: bool, blocklist_id: str | None = None
+) -> None:
     """Keep one AdGuard query-log entry for the live view and the report charts."""
     if blocked:
         status = "blocked"
-        # rules from filter_list_id 0 are AdGuard's custom rules, which only QuietNet writes
-        ours = any(not (r or {}).get("filter_list_id") for r in (e.get("rules") or []))
-        blocked_by = "rule" if ours else "list"
+        # rules from filter_list_id 0 are AdGuard's custom rules, which only QuietNet writes; QuietNet's block list is
+        # its own filter (pahra.blocklist); any other filter is a list the operator added (threat intelligence)
+        ids = [str((r or {}).get("filter_list_id") or 0) for r in (e.get("rules") or [])]
+        if "0" in ids:
+            blocked_by = "rule"
+        elif blocklist_id and blocklist_id in ids:
+            blocked_by = "blocklist"
+        else:
+            blocked_by = "list"
     else:
         status = "cached" if e.get("cached") else "allowed"
         blocked_by = None

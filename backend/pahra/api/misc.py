@@ -79,6 +79,8 @@ async def health(e: Engine = Depends(engine)):
         "poller": {"last_poll": e.poller.last_poll, "error": e.poller.last_error, "interval_s": e.poller.interval_s},
         "sync": {"dirty": e.sync.dirty, "last_ok": e.sync.last_ok, "error": e.sync.last_error},
         "lists": e.lists.stats(),
+        # QuietNet's block list: AdGuard blocks it for every home; listed and clean domains are described without AI
+        "blocklist": e.blocklist.stats() | e.sync.blocklist_status() | {"known_without_ai": e.pipeline.known_without_ai},
         "llm": {"enabled": e.explainer.enabled, "model": e.explainer.model, "error": e.explainer.last_error},
         "tracing": e.tracing.status(),
         "domains_explained": e.conn.execute("SELECT COUNT(*) FROM domains").fetchone()[0],

@@ -55,40 +55,50 @@ def test_full_flow_block_all_and_undo(api, fake):
     assert fake.match("example.com", "stranger")[0] and not fake.match("dynupdate.no-ip.com", "stranger")[0]
     assert not fake.match("example.com", "rahhul-phone")[0]
 
-    for q in ["tkacr.alphonso.tv", "us.ad.lgsmartad.com", "api-global.netflix.com", "googleads.g.doubleclick.net"]:
+    # doubleclick.net itself isn't listed (g.doubleclick.net is), so the TV gets an answer for it
+    for q in ["tkacr.alphonso.tv", "us.ad.lgsmartad.com", "api-global.netflix.com", "googleads.g.doubleclick.net", "doubleclick.net"]:
         fake.record("rahhul-lg-tv", q)
     fake.record("rahhul-phone", "app-measurement.com")
+    fake.record("rahhul-phone", "z-na.amazon-adsystem.com")
     asyncio.run(_drive(api, fake))
 
+    # Known trackers are on QuietNet's block list: AdGuard turned them away on the very first lookup, on every
+    # device, before anyone clicked anything. They aren't cards.
+    assert fake.match("tkacr.alphonso.tv", "rahhul-lg-tv")[0] and fake.match("alphonso.tv", "rahhul-phone")[0]
+    by = {r["qname"]: r["blocked_by"] for r in api.engine.conn.execute("SELECT qname, blocked_by FROM queries")}
+    assert by["tkacr.alphonso.tv"] == by["app-measurement.com"] == "blocklist" and by["api-global.netflix.com"] is None
     cards = api.get("/api/suggestions", headers=H).json()
     domains = [c["domain"] for c in cards]
-    assert domains[0] == "alphonso.tv"  # ACR tracker sorts first
-    assert not any("netflix" in d for d in domains)
+    # Not on the list: amazon-adsystem.com, and doubleclick.net since the TV looked up a name of it no list has (the
+    # lists have only some, such as g.doubleclick.net). Blocking all of them is still the person's call.
+    assert sorted(domains) == ["amazon-adsystem.com", "doubleclick.net"]
     assert all(c["sources"] for c in cards if c["confidence"] == "high")
 
     devs = api.get("/api/devices", headers=H).json()
     assert next(d for d in devs if d["client_id"] == "rahhul-lg-tv")["risk_score"] > 0
 
     r = api.post("/api/decisions/bulk", json={}, headers=H).json()
-    assert r["synced"] and r["count"] >= 3
-    assert fake.match("alphonso.tv", "rahhul-lg-tv")[0]
-    assert fake.match("app-measurement.com", "rahhul-phone")[0]
-    blocked, rules = fake.match("alphonso.tv", "someone-else")  # a stranger: only ever the rescue catch-all
+    assert r["synced"] and r["count"] == 2
+    assert fake.match("ads.doubleclick.net", "rahhul-lg-tv")[0]
+    assert fake.match("z-na.amazon-adsystem.com", "rahhul-phone")[0]
+    blocked, rules = fake.match("doubleclick.net", "someone-else")  # a stranger: only ever the rescue catch-all
     assert not blocked or all(r.startswith("||*^$client=~") for r in rules)
     assert api.get("/api/suggestions", headers=H).json() == []
 
     api.post("/api/decisions/undo-bulk", json={"ids": [d["id"] for d in r["decisions"]]}, headers=H)
-    assert not fake.match("alphonso.tv", "rahhul-lg-tv")[0]
+    assert not fake.match("doubleclick.net", "rahhul-lg-tv")[0]
     assert len(api.get("/api/suggestions", headers=H).json()) == len(cards)
 
     # "Block all (N)" blocks only the N cards on screen, not ones that arrived after the page rendered
-    r = api.post("/api/decisions/bulk", json={"domains": ["alphonso.tv"]}, headers=H).json()
-    assert [d["domain"] for d in r["decisions"]] == ["alphonso.tv"]
-    assert not fake.match("app-measurement.com", "rahhul-phone")[0]
+    r = api.post("/api/decisions/bulk", json={"domains": ["doubleclick.net"]}, headers=H).json()
+    assert [d["domain"] for d in r["decisions"]] == ["doubleclick.net"]
+    assert not fake.match("z-na.amazon-adsystem.com", "rahhul-phone")[0]
     api.post("/api/decisions/undo-bulk", json={"ids": [d["id"] for d in r["decisions"]]}, headers=H)
 
     acts = api.get(f"/api/devices/{tv['id']}/activity", headers=H).json()
     assert any(g["owner"].startswith("Alphonso") for g in acts)
+    alph = next(x for g in acts for x in g["domains"] if x["domain"] == "alphonso.tv")
+    assert alph["blocklist"] and alph["decision"] is None
     alerts = api.get("/api/alerts", headers=H).json()
     assert any(a["type"] == "acr_tracker" for a in alerts)
     rep = api.get("/api/report/weekly", headers=H).json()

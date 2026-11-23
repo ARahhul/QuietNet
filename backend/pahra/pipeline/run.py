@@ -7,6 +7,7 @@ from collections import defaultdict
 
 from ..adguard.client import AdGuardError
 from ..adguard.sync import AdGuardSync
+from ..blocklist import MUST_ALLOW_TEXT, BlocklistIndex, blocked_verdict, clean_verdict, threat_verdict
 from ..db import now_iso
 from ..decisions import active_decision, create_decision
 from ..knowledge import is_acr, is_must_allow, is_must_allow_any_device
@@ -30,13 +31,43 @@ class Pipeline:
         clues: ClueFetcher,
         explainer: Explainer,
         sync: AdGuardSync,
+        blocklist: BlocklistIndex | None = None,
     ):
         self.conn = conn
         self.lists = lists
         self.clues = clues
         self.explainer = explainer
         self.sync = sync
+        # The engine hands over the full index after each build; standalone (tests, CLI) build it from these lists.
+        self.blocklist = blocklist if blocklist is not None else BlocklistIndex.build(lists)
         self.processed = 0
+        self.known_without_ai = 0  # domains described from the block / clean / threat lists, never sent to AI
+
+    def blocklisted(self, domain: str) -> bool:
+        return self.sync.blocklist_active and self.blocklist.covers(domain) is not None
+
+    def known_verdict(self, domain: str, qnames: list[str], fast) -> dict | None:
+        """A verdict straight from QuietNet's lists, or None when the domain is unknown and needs the AI.
+
+        Order: must-allow (never blocked) -> block list -> threat intel -> clean list.
+        """
+        if is_must_allow_any_device(domain):
+            c = self.blocklist.clean_match(domain)
+            v = clean_verdict(domain, c) if c is not None and c.kind == "must_allow" else None
+            return v or {
+                "domain": domain, "category": "needed", "owner": None, "what_it_does": MUST_ALLOW_TEXT,
+                "break_risk": "high", "break_note": "Needed for the device or a core app to work.", "confidence": "high",
+                "sources": ["QuietNet must-allow list"], "explained_by": "must_allow",
+            }
+        e = self.blocklist.match(domain, qnames)
+        if e is not None:
+            return blocked_verdict(domain, e)
+        if fast.threat_hits:
+            return threat_verdict(domain, fast.threat_hits, fast.tracker_owner or fast.entity)
+        c = self.blocklist.clean_match(domain)
+        if c is not None:
+            return clean_verdict(domain, c)
+        return None
 
     def _cached(self, domain: str) -> bool:
         return self.conn.execute("SELECT 1 FROM domains WHERE domain = ?", (domain,)).fetchone() is not None
@@ -61,12 +92,26 @@ class Pipeline:
         # Stage 2: global cache
         uncached = [d for d in by_domain if not self._cached(d)]
 
-        # Stage 3: fast checks + immediate quarantine for brand-new suspicious domains
+        # Stage 3: fast checks. Anything QuietNet's lists already know (block list, threat intel, clean list) is
+        # described from them right here: no clues, no AI. Only unknown domains go on to stages 4-5.
         fasts = {}
         quarantined = False
+        unknown: list[str] = []
         for d in uncached:
             fast = fast_check(self.lists, d, sorted(names[d]))
             fasts[d] = fast
+            known = self.known_verdict(d, sorted(names[d]), fast)
+            if known is not None:
+                self.save_domain(d, known, fast.signals() | {
+                    "beacon": False,
+                    "domain_age_days": None,
+                    "acr": is_acr(d) or bool((e := self.blocklist.match(d, names[d])) and e.acr),
+                    "suspicious_unknown": False,
+                    "blocklist": known["explained_by"] == "blocklist",
+                })
+                self.known_without_ai += 1
+                continue
+            unknown.append(d)
             if not fast.suspicious_unknown:
                 continue
             for ob in by_domain[d]:
@@ -80,9 +125,9 @@ class Pipeline:
         if quarantined:
             await self._push()  # block first, explain later
 
-        # Stage 4 + 5: clues in parallel, then batched explanations
-        if uncached:
-            clue_list = await self.clues.gather([(fasts[d], sorted(names[d])) for d in uncached])
+        # Stage 4 + 5: clues in parallel, then batched explanations (unknown domains only)
+        if unknown:
+            clue_list = await self.clues.gather([(fasts[d], sorted(names[d])) for d in unknown])
             verdicts = await self.explainer.explain(clue_list)
             for c in clue_list:
                 v = apply_confidence(verdicts[c.domain], c.fast, c.beacon, is_must_allow_any_device(c.domain))
@@ -98,7 +143,9 @@ class Pipeline:
         # Stage 6: policy for every observed (device, domain)
         changed = False
         for ob in observed:
-            changed |= apply_policy(self.conn, ob.device_id, ob.domain, tuple(ob.qnames), ob.max_gap_s)
+            changed |= apply_policy(
+                self.conn, ob.device_id, ob.domain, tuple(ob.qnames), ob.max_gap_s, blocklisted=self.blocklisted(ob.domain)
+            )
         for dev in {ob.device_id for ob in observed}:
             check_odd_behaviour(self.conn, dev)
         if changed:
@@ -132,7 +179,16 @@ class Pipeline:
         items = []
         for r in rows:
             d = r["domain"]
-            items.append((fast_check(self.lists, d), [d]))
+            fast = fast_check(self.lists, d)
+            known = self.known_verdict(d, [d], fast)
+            if known is not None:  # the lists know it now: describe it from them instead of asking the AI
+                sig = json.loads(self.conn.execute("SELECT signals FROM domains WHERE domain = ?", (d,)).fetchone()["signals"])
+                self.save_domain(d, known, sig | {"blocklist": known["explained_by"] == "blocklist"})
+                self.known_without_ai += 1
+                continue
+            items.append((fast, [d]))
+        if not items:
+            return 0
         clue_list = await self.clues.gather(items)
         verdicts = await self.explainer.explain(clue_list)
         n = 0

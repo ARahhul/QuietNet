@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Ban, Check, Clock, Lock, Radio } from 'lucide-react'
 import { useState } from 'react'
 import { api, ApiError, type Suggestion } from '../api'
+import { ViewButton } from './DomainView'
 import { CategoryChip, ConfidenceChip, Roll, timeAgo, useToast } from './ui'
 
 export default function SuggestionCard({ s, onLater }: { s: Suggestion; onLater: () => void }) {
@@ -47,7 +48,10 @@ export default function SuggestionCard({ s, onLater }: { s: Suggestion; onLater:
       </div>
 
       <h3 className="mt-4 font-display text-xl leading-snug font-normal">{s.owner ?? (unknown ? 'Unknown company' : s.domain)}</h3>
-      <div className="mt-0.5 font-mono text-xs text-muted">{s.domain}</div>
+      <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="font-mono text-xs text-muted">{s.domain}</span>
+        <ViewButton name={s.domain} variant="link" />
+      </div>
       <div className="mt-4 border-t border-line pt-4">
         <p className={`max-w-prose text-sm ${unknown ? 'italic text-muted' : 'text-body'}`}>{s.what_it_does}</p>
       </div>

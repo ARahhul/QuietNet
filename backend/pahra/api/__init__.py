@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from . import account, cards, devices, hunt, misc, providers, screen, sites, traffic
+from . import account, cards, devices, domains, hunt, misc, providers, screen, sites, traffic
 from .deps import current_user
 from .limits import limit_api
 
@@ -8,6 +8,7 @@ router = APIRouter(prefix="/api", dependencies=[Depends(current_user), Depends(l
 router.include_router(account.router)
 router.include_router(devices.router)
 router.include_router(cards.router)
+router.include_router(domains.router)
 router.include_router(misc.router)
 router.include_router(providers.router)
 router.include_router(screen.router)

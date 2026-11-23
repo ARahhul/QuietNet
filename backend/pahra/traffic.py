@@ -161,7 +161,8 @@ def analytics(conn: sqlite3.Connection, user_id: str, hours: int = 24, device_id
 
     t = conn.execute(
         f"SELECT COUNT(*) total, COALESCE(SUM(q.status = 'blocked'), 0) blocked, "
-        f"COALESCE(SUM(q.status = 'blocked' AND COALESCE(q.blocked_by, '') != 'list'), 0) by_rules, "
+        f"COALESCE(SUM(q.status = 'blocked' AND COALESCE(q.blocked_by, '') NOT IN ('list', 'blocklist')), 0) by_rules, "
+        f"COALESCE(SUM(q.status = 'blocked' AND q.blocked_by = 'blocklist'), 0) by_blocklist, "
         f"COALESCE(SUM(q.status = 'cached'), 0) cached, "
         f"COUNT(DISTINCT q.domain) domains, COUNT(DISTINCT q.device_id) devices, AVG(q.elapsed_ms) avg_ms {base}",
         args,
@@ -191,6 +192,7 @@ def analytics(conn: sqlite3.Connection, user_id: str, hours: int = 24, device_id
             "queries": t["total"],
             "blocked": t["blocked"],
             "blocked_by_rules": t["by_rules"],
+            "blocked_by_blocklist": t["by_blocklist"],
             "cached": t["cached"],
             "domains": t["domains"],
             "active_devices": t["devices"],

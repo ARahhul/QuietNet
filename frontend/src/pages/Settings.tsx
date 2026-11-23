@@ -54,6 +54,16 @@ export default function Settings() {
           ok={!!h && h.lists.loaded_from !== 'empty'}
           detail={h ? `${Object.values(h.lists.lists).reduce((a, b) => a + b, 0).toLocaleString()} domains · ${h.lists.tracker_radar_entries} Tracker Radar · ${h.lists.loaded_from}` : ''}
         />
+        {h?.blocklist && (
+          <Row
+            label="Ad & tracker list"
+            ok={h.blocklist.active && !h.blocklist.error}
+            detail={
+              h.blocklist.error ??
+              `${h.blocklist.blocked_in_adguard.toLocaleString()} domains blocked for every home · ${h.blocklist.clean.toLocaleString()} clean · ${h.blocklist.known_without_ai.toLocaleString()} explained without AI · ${h.blocklist.source}`
+            }
+          />
+        )}
         <Row
           label="AI explainer"
           ok={!!h?.llm.enabled && !h.llm.error}

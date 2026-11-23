@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type Analytics } from '../api'
 import { BucketTable, Breakdown, ChartCard, Legend, RankedList, StackedColumns, type Series } from '../components/charts'
+import { useDomainView } from '../components/DomainView'
 import { DeviceIcon, Empty, FilterChip } from '../components/ui'
 import { DATA, SERIES, TYPE_COLORS, UPSTREAM_COLORS, fmt, resolverName } from '../lib/viz'
 
@@ -99,13 +100,20 @@ export default function Report() {
       {!r ? (
         <p className="mt-8 text-muted">Loading…</p>
       ) : (
-        <Body r={r} dim={q.isPlaceholderData} colorOf={colorOf} single={!!deviceId} />
+        <Body r={r} dim={q.isPlaceholderData} colorOf={colorOf} deviceId={deviceId} />
       )}
     </div>
   )
 }
 
-function Body({ r, dim, colorOf, single }: { r: Analytics; dim: boolean; colorOf: (id: string) => string; single: boolean }) {
+function Body({ r, dim, colorOf, deviceId }: { r: Analytics; dim: boolean; colorOf: (id: string) => string; deviceId?: string }) {
+  const single = !!deviceId
+  const view = useDomainView()
+  const domainLabel = (domain: string) => (
+    <button type="button" className="font-mono text-[13px] hover:underline" title={`View ${domain}`} onClick={() => view(domain, deviceId)}>
+      {domain}
+    </button>
+  )
   const t = r.totals
   const start = Date.parse(r.start)
   const bucketMs = r.bucket_s * 1000
@@ -131,7 +139,7 @@ function Body({ r, dim, colorOf, single }: { r: Analytics; dim: boolean; colorOf
         <Stat
           label="Blocked"
           value={fmt(t.blocked)}
-          foot={`${fmt(t.blocked_by_rules)} by your rules`}
+          foot={`${fmt(t.blocked_by_rules)} by your rules, ${fmt(t.blocked_by_blocklist ?? 0)} by QuietNet's list`}
           to="/live?status=blocked"
           action="See them"
         />
@@ -181,14 +189,14 @@ function Body({ r, dim, colorOf, single }: { r: Analytics; dim: boolean; colorOf
             <RankedList
               color={DATA.blocked}
               empty="Nothing blocked in this window."
-              rows={r.top_blocked.map((x) => ({ key: x.domain, label: <span className="font-mono text-[13px]">{x.domain}</span>, sub: x.owner, value: x.n }))}
+              rows={r.top_blocked.map((x) => ({ key: x.domain, label: domainLabel(x.domain), sub: x.owner, value: x.n }))}
             />
           </ChartCard>
           <ChartCard title="Most looked up">
             <RankedList
               color={DATA.allowed}
               empty="No allowed lookups in this window."
-              rows={r.top_allowed.map((x) => ({ key: x.domain, label: <span className="font-mono text-[13px]">{x.domain}</span>, sub: x.owner, value: x.n }))}
+              rows={r.top_allowed.map((x) => ({ key: x.domain, label: domainLabel(x.domain), sub: x.owner, value: x.n }))}
             />
           </ChartCard>
           <ChartCard title="Top data collectors" note="Companies behind ad, tracking and telemetry lookups.">
