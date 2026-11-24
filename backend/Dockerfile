@@ -1,6 +1,6 @@
 # QuietNet engine + API for the cloud VM (infra/docker-compose.cloud.yml builds this).
 # Dependencies come from poetry.lock, so the VM runs exactly what the tests ran against.
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
